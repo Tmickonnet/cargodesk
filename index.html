@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CARGODESK — Logistics Remote Income System</title>
+  <meta name="description" content="AI-powered logistics data entry job monitor, screener, pipeline and profile builder."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:ital,wght@0,300;0,400;0,500;1,400&family=Roboto+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Lora:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#0b0f1a;color:#c9d8f0;font-family:'Roboto Mono',monospace;min-height:100vh;}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel" data-presets="react">
+
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const SHIPPING_COMPANIES = [
+  "Maersk","MSC","CMA CGM","COSCO","Evergreen","Hapag-Lloyd","ONE",
+  "Yang Ming","HMM","ZIM","FedEx Freight","UPS Supply Chain",
+  "DHL Logistics","XPO Logistics","CH Robinson","Kuehne+Nagel",
+  "DB Schenker","Expeditors","Flexport","Amazon Logistics"
+];
+const KEY_AREAS = [
+  "Bill of Lading Entry","Freight Invoice Processing","Customs Documentation",
+  "Shipment Tracking Updates","Rate Tariff Entry","Manifest Data Entry",
+  "Cargo Booking Entry","Container Management","Port of Entry Records",
+  "Carrier Data Reconciliation","Import/Export Compliance","Warehouse Inventory Entry"
+];
+const PLATFORMS = ["Indeed","FlexJobs","Upwork","Toptal","Remote.co","We Work Remotely","LinkedIn","Fiverr"];
+const TOOLS_LIST = [
+  ["Excel","SAP"],["CargoWise","Excel"],["Oracle TMS","WMS"],
+  ["QuickBooks","EDI"],["Dynamics 365","Power BI"]
+];
+
+const STAGES = [
+  { id:"watchlist", label:"Watchlist",   icon:"◎", color:"#6b7280" },
+  { id:"applied",   label:"Applied",     icon:"▶", color:"#3b82f6" },
+  { id:"screening", label:"Screening",   icon:"⟳", color:"#f59e0b" },
+  { id:"interview", label:"Interview",   icon:"◈", color:"#8b5cf6" },
+  { id:"offer",     label:"Offer",       icon:"★", color:"#10b981" },
+  { id:"rejected",  label:"Rejected",    icon:"✕", color:"#ef4444" },
+];
+
+function rand(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+let _id = 1;
+function makeJob(){
+  const hr = rand(18,75), hw = [20,25,30,40][rand(0,3)];
+  return {
+    id: _id++,
+    company: SHIPPING_COMPANIES[rand(0,19)],
+    area: KEY_AREAS[rand(0,11)],
+    platform: PLATFORMS[rand(0,7)],
+    hourlyRate: hr, hoursPerWeek: hw, weeklyEarning: hr*hw,
+    urgency: ["Urgent","Active","Open"][rand(0,2)],
+    daysAgo: rand(0,6), applicants: rand(3,89),
+    experience: ["Entry-level","1-2 yrs","3-5 yrs","5+ yrs"][rand(0,3)],
+    tools: TOOLS_LIST[rand(0,4)],
+    aiScore: null, aiGrade: null, aiBreakdown: null,
+    aiReason: null, aiPros: null, aiCons: null,
+    screened: false, aiLoading: false,
+    stage: "watchlist",
+    notes: "", appliedDate: null, nextAction: "", nextDate: null,
+    offerAmount: null,
+  };
+}
+
+const SEED_JOBS = Array.from({length:10}, makeJob);
+// give a couple demo entries in pipeline
+SEED_JOBS[0] = {...SEED_JOBS[0], stage:"applied",   appliedDate:"2026-05-06", nextAction:"Follow up", nextDate:"2026-05-13"};
+SEED_JOBS[1] = {...SEED_JOBS[1], stage:"interview",  appliedDate:"2026-05-02", nextAction:"Prep interview", nextDate:"2026-05-12"};
+SEED_JOBS[2] = {...SEED_JOBS[2], stage:"offer",      appliedDate:"2026-04-28", offerAmount: SEED_JOBS[2].hourlyRate+5};
+SEED_JOBS[3] = {...SEED_JOBS[3], stage:"screening",  appliedDate:"2026-05-05"};
+
+// ─── STYLES ───────────────────────────────────────────────────────────────────
+const CSS = `
+
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0b0f1a;
+  --s1:#111827;
+  --s2:#1a2235;
+  --s3:#243048;
+  --border:#2a3a54;
+  --text:#c9d8f0;
+  --muted:#4d6180;
+  --white:#f0f6ff;
+  --blue:#4f8ef7;
+  --teal:#2dd4bf;
+  --amber:#fbbf24;
+  --violet:#a78bfa;
+  --green:#34d399;
+  --red:#f87171;
+  --gray:#6b7280;
+  --display:'Archivo Black',sans-serif;
+  --body:'Archivo',sans-serif;
+  --mono:'Roboto Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:100vh;}
+
+/* NAV */
+.nav{
+  display:flex;align-items:center;gap:0;
+  background:var(--s1);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;
+  position:sticky;top:0;z-index:50;
+}
+.nav-brand{
+  font-family:var(--display);font-size:18px;color:var(--white);
+  padding:16px 0;margin-right:32px;letter-spacing:.5px;
+}
+.nav-brand span{color:var(--teal);}
+.nav-tab{
+  padding:18px 18px 16px;
+  font-family:var(--mono);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+  background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.nav-tab:hover{color:var(--text);}
+.nav-tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+.nav-badge{
+  display:inline-block;background:var(--teal);color:var(--bg);
+  border-radius:10px;font-size:9px;padding:1px 6px;margin-left:5px;
+  font-weight:700;vertical-align:middle;
+}
+
+.page{max-width:1380px;margin:0 auto;padding:28px 24px 80px;}
+
+/* ── MONITOR PAGE ── */
+.monitor-header{margin-bottom:20px;}
+.monitor-title{font-family:var(--display);font-size:28px;color:var(--white);margin-bottom:4px;}
+.monitor-sub{font-size:13px;color:var(--muted);}
+
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:22px;}
+@media(max-width:800px){.kpi-row{grid-template-columns:repeat(3,1fr);}}
+.kpi{
+  background:var(--s1);border:1px solid var(--border);border-radius:6px;
+  padding:14px 16px;position:relative;overflow:hidden;
+}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi.teal::after{background:var(--teal);}
+.kpi.blue::after{background:var(--blue);}
+.kpi.amber::after{background:var(--amber);}
+.kpi.violet::after{background:var(--violet);}
+.kpi.green::after{background:var(--green);}
+.kpi-val{font-family:var(--display);font-size:28px;color:var(--white);line-height:1;}
+.kpi-lbl{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+
+.job-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+.ji{
+  background:var(--s1);border:1px solid var(--border);border-radius:4px;
+  padding:9px 12px;font-family:var(--mono);font-size:11px;color:var(--text);
+  outline:none;cursor:pointer;transition:border-color .15s;
+}
+.ji:focus,.ji:hover{border-color:var(--teal);}
+.ji.grow{flex:1;min-width:160px;}
+.btn{
+  padding:9px 18px;border-radius:4px;border:none;cursor:pointer;
+  font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:1px;
+  text-transform:uppercase;transition:all .15s;
+}
+.btn-teal{background:var(--teal);color:var(--bg);}
+.btn-teal:hover{background:#5eead4;}
+.btn-teal:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-outline:hover{border-color:var(--teal);color:var(--teal);}
+.btn-sm{padding:6px 12px;font-size:10px;}
+
+.jlist-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+
+.jcard{
+  background:var(--s1);border:1px solid var(--border);border-radius:6px;
+  margin-bottom:8px;overflow:hidden;transition:border-color .2s,box-shadow .2s;
+  animation:fin .3s ease both;
+}
+.jcard:hover{border-color:var(--teal);box-shadow:0 4px 24px rgba(45,212,191,.06);}
+@keyframes fin{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+.jcard-top{
+  display:grid;grid-template-columns:56px 1fr auto auto;
+  align-items:stretch;cursor:pointer;
+}
+.jcard-score{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border-right:1px solid var(--border);padding:8px 4px;min-height:72px;
+}
+.jcard-score.A{background:rgba(52,211,153,.08);color:var(--green);}
+.jcard-score.B{background:rgba(251,191,36,.08);color:var(--amber);}
+.jcard-score.C{background:rgba(248,113,113,.08);color:var(--red);}
+.jcard-score.none{background:var(--s2);color:var(--muted);}
+.grade-g{font-family:var(--display);font-size:24px;line-height:1;}
+.grade-n{font-family:var(--mono);font-size:9px;margin-top:1px;}
+
+.jcard-info{padding:10px 14px;display:flex;flex-direction:column;gap:2px;min-width:0;}
+.jcard-co{font-family:var(--display);font-size:16px;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.jcard-area{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic;}
+.jcard-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;}
+.jtag{font-family:var(--mono);font-size:9px;letter-spacing:1px;border:1px solid var(--border);border-radius:2px;padding:1px 6px;color:var(--muted);}
+.jtag.urgent{border-color:rgba(248,113,113,.4);color:var(--red);}
+.jtag.active{border-color:rgba(251,191,36,.4);color:var(--amber);}
+.jtag.open{border-color:rgba(52,211,153,.4);color:var(--green);}
+.jtag.stage{border-color:rgba(79,142,247,.4);color:var(--blue);}
+
+.jcard-pay{
+  padding:10px 14px;border-left:1px solid var(--border);
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-end;gap:2px;
+}
+.pay-h{font-family:var(--display);font-size:19px;color:var(--white);}
+.pay-w{font-family:var(--mono);font-size:10px;color:var(--muted);}
+
+.jcard-btns{
+  padding:10px 12px;border-left:1px solid var(--border);
+  display:flex;flex-direction:column;gap:6px;justify-content:center;
+}
+.jcard-btn{
+  background:transparent;border:1px solid var(--border);border-radius:3px;
+  padding:5px 10px;font-family:var(--mono);font-size:10px;color:var(--muted);
+  cursor:pointer;transition:all .12s;white-space:nowrap;
+}
+.jcard-btn:hover{border-color:var(--teal);color:var(--teal);}
+.jcard-btn.primary{background:var(--teal);color:var(--bg);border-color:var(--teal);}
+.jcard-btn.primary:hover{background:#5eead4;}
+.jcard-btn.active-stage{background:rgba(79,142,247,.12);border-color:var(--blue);color:var(--blue);}
+.jcard-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+.spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:sp .7s linear infinite;margin:auto;}
+@keyframes sp{to{transform:rotate(360deg);}}
+
+/* AI BREAKDOWN */
+.ai-panel{
+  border-top:1px dashed var(--border);
+  padding:18px 18px 18px 70px;
+  background:var(--s2);
+  animation:fin .2s ease;
+}
+.ai-panel-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:14px;}
+.ai-bars{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+@media(max-width:640px){.ai-bars{grid-template-columns:repeat(2,1fr);}}
+.ai-bar-box{background:var(--s3);border:1px solid var(--border);border-radius:4px;padding:10px 12px;}
+.ai-bar-lbl{font-family:var(--mono);font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.ai-bar-track{height:5px;background:var(--border);border-radius:2px;margin-bottom:5px;overflow:hidden;}
+.ai-bar-fill{height:100%;border-radius:2px;transition:width .6s ease;}
+.g{background:var(--green);} .a{background:var(--amber);} .r{background:var(--red);}
+.ai-bar-val{font-family:var(--display);font-size:20px;color:var(--white);}
+.ai-reason{font-size:12px;color:#8ba5c8;line-height:1.7;border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px;font-style:italic;}
+.ai-chips{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{font-family:var(--mono);font-size:9px;letter-spacing:1px;border:1px solid;border-radius:2px;padding:2px 8px;}
+.chip-g{border-color:rgba(52,211,153,.4);color:var(--green);}
+.chip-r{border-color:rgba(248,113,113,.4);color:var(--red);}
+
+/* ── PIPELINE PAGE ── */
+.pipeline-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+.pipeline-title{font-family:var(--display);font-size:28px;color:var(--white);}
+.pipeline-sub{font-size:13px;color:var(--muted);margin-top:2px;}
+
+.pipeline-stats{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:24px;}
+@media(max-width:900px){.pipeline-stats{grid-template-columns:repeat(3,1fr);}}
+.ps{
+  border-radius:5px;padding:12px 14px;text-align:center;
+  border:1px solid var(--border);background:var(--s1);
+}
+.ps-icon{font-size:18px;margin-bottom:4px;}
+.ps-val{font-family:var(--display);font-size:22px;color:var(--white);}
+.ps-lbl{font-family:var(--mono);font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:2px;}
+
+/* KANBAN */
+.kanban{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:start;}
+@media(max-width:1100px){.kanban{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:640px){.kanban{grid-template-columns:repeat(2,1fr);}}
+
+.col{
+  background:var(--s1);border:1px solid var(--border);border-radius:6px;
+  display:flex;flex-direction:column;min-height:200px;
+}
+.col-header{
+  padding:12px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.col-label{
+  font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;
+  display:flex;align-items:center;gap:7px;
+}
+.col-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.col-count{
+  background:var(--s2);border:1px solid var(--border);border-radius:10px;
+  font-family:var(--mono);font-size:9px;padding:1px 7px;color:var(--muted);
+}
+.col-body{padding:10px;display:flex;flex-direction:column;gap:8px;flex:1;}
+
+/* PIPELINE CARD */
+.pcard{
+  background:var(--s2);border:1px solid var(--border);border-radius:5px;
+  padding:11px 12px;cursor:pointer;transition:all .15s;
+  animation:fin .25s ease;
+}
+.pcard:hover{border-color:var(--teal);box-shadow:0 2px 12px rgba(45,212,191,.08);}
+.pcard-co{font-family:var(--display);font-size:13px;color:var(--white);margin-bottom:2px;}
+.pcard-area{font-size:10px;color:var(--muted);margin-bottom:7px;line-height:1.3;}
+.pcard-pay{font-family:var(--mono);font-size:11px;color:var(--teal);margin-bottom:7px;}
+.pcard-meta{font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:8px;display:flex;flex-direction:column;gap:2px;}
+.pcard-next{
+  background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);
+  border-radius:3px;padding:4px 8px;
+  font-family:var(--mono);font-size:9px;color:var(--amber);margin-bottom:8px;
+}
+.pcard-offer{
+  background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);
+  border-radius:3px;padding:5px 8px;
+  font-family:var(--display);font-size:16px;color:var(--green);margin-bottom:8px;
+}
+.pcard-move{display:flex;gap:4px;flex-wrap:wrap;}
+.move-btn{
+  flex:1;background:transparent;border:1px solid var(--border);border-radius:2px;
+  padding:4px 4px;font-family:var(--mono);font-size:9px;color:var(--muted);
+  cursor:pointer;transition:all .12s;text-align:center;
+}
+.move-btn:hover{border-color:var(--teal);color:var(--teal);}
+.move-btn.danger:hover{border-color:var(--red);color:var(--red);}
+
+/* DETAIL MODAL */
+.overlay{
+  position:fixed;inset:0;background:rgba(5,10,22,.88);
+  z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;
+  animation:ov .2s ease;
+}
+@keyframes ov{from{opacity:0;}to{opacity:1;}}
+.modal{
+  background:var(--s1);border:1px solid var(--teal);border-radius:8px;
+  padding:28px;max-width:520px;width:100%;position:relative;
+  max-height:90vh;overflow-y:auto;
+  animation:fin .2s ease;
+}
+.modal-close{
+  position:absolute;top:14px;right:14px;
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:3px;width:28px;height:28px;font-size:14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .12s;
+}
+.modal-close:hover{border-color:var(--red);color:var(--red);}
+.modal-title{font-family:var(--display);font-size:20px;color:var(--white);margin-bottom:4px;}
+.modal-co{font-size:12px;color:var(--muted);margin-bottom:18px;font-style:italic;}
+.modal-section{margin-bottom:18px;}
+.modal-section-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.modal-field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+.modal-field label{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.modal-input{
+  background:var(--s2);border:1px solid var(--border);border-radius:3px;
+  padding:8px 10px;font-family:var(--mono);font-size:12px;color:var(--text);
+  outline:none;width:100%;transition:border-color .15s;
+}
+.modal-input:focus{border-color:var(--teal);}
+.modal-textarea{
+  background:var(--s2);border:1px solid var(--border);border-radius:3px;
+  padding:8px 10px;font-family:var(--body);font-size:12px;color:var(--text);
+  outline:none;width:100%;min-height:80px;resize:vertical;transition:border-color .15s;
+}
+.modal-textarea:focus{border-color:var(--teal);}
+.stage-select-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.stage-pill{
+  padding:6px 12px;border-radius:3px;border:1px solid var(--border);
+  font-family:var(--mono);font-size:10px;cursor:pointer;
+  background:transparent;color:var(--muted);transition:all .12s;
+}
+.stage-pill.active-pill{color:var(--white);}
+.modal-save{
+  background:var(--teal);color:var(--bg);border:none;border-radius:4px;
+  padding:10px 22px;font-family:var(--mono);font-size:11px;font-weight:500;
+  letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:background .15s;width:100%;
+}
+.modal-save:hover{background:#5eead4;}
+
+/* PROGRESS BAR */
+.progress-wrap{margin-bottom:24px;}
+.progress-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;}
+.progress-track{display:flex;gap:3px;}
+.progress-seg{flex:1;height:5px;border-radius:2px;background:var(--border);transition:background .4s;}
+.progress-seg.done{background:var(--teal);}
+.progress-seg.offer{background:var(--green);}
+.progress-seg.rejected{background:var(--red);}
+
+/* TOAST */
+.toast-wrap{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:300;}
+.toast{
+  background:var(--s1);border:1px solid var(--teal);border-radius:5px;
+  padding:10px 16px;font-family:var(--mono);font-size:11px;color:var(--text);
+  animation:fin .3s ease;max-width:280px;
+}
+.toast.warn{border-color:var(--amber);}
+.toast.success{border-color:var(--green);}
+
+/* SCREENER PROFILE */
+.profile-bar{
+  background:var(--s1);border:1px solid var(--border);border-radius:6px;
+  padding:18px 20px;margin-bottom:20px;
+}
+.profile-bar-title{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+.profile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:700px){.profile-grid{grid-template-columns:1fr 1fr;}}
+.pf{display:flex;flex-direction:column;gap:4px;}
+.pf label{font-family:var(--mono);font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
+.pf input,.pf select,.pf textarea{
+  background:var(--s2);border:1px solid var(--border);border-radius:3px;
+  padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--text);
+  outline:none;transition:border-color .15s;
+}
+.pf input:focus,.pf select:focus,.pf textarea:focus{border-color:var(--teal);}
+.pf textarea{resize:vertical;min-height:58px;}
+.pf-full{grid-column:1/-1;}
+
+.screen-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+`;
+
+// ─── CLAUDE SCREENER ──────────────────────────────────────────────────────────
+async function scoreJob(job, profile) {
+  const prompt = `You are a logistics career coach scoring a remote data entry job for a candidate.
+
+CANDIDATE: experience=${profile.experience}, tools="${profile.tools}", target=$${profile.minRate}-$${profile.maxRate}/hr, hours=${profile.hoursPerWeek}/wk, priority=${profile.priority}, notes="${profile.notes}"
+JOB: company=${job.company}, area="${job.area}", platform=${job.platform}, rate=$${job.hourlyRate}/hr, hours=${job.hoursPerWeek}/wk, required experience=${job.experience}, required tools=${job.tools.join("+")}, urgency=${job.urgency}, applicants=${job.applicants}, posted=${job.daysAgo===0?"today":job.daysAgo+"d ago"}
+
+Score 0-100: payFit, skillFit, competitionLevel, urgencyScore. Overall 0-100 + grade A/B/C.
+2-sentence honest reason. 2 pros, 2 cons (max 5 words each).
+
+JSON only, no markdown:
+{"overall":0,"grade":"B","payFit":0,"skillFit":0,"competitionLevel":0,"urgencyScore":0,"reason":"","pros":["",""],"cons":["",""]}`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,messages:[{role:"user",content:prompt}]})
+  });
+  const d = await res.json();
+  const txt = d.content?.map(b=>b.text||"").join("")||"";
+  return JSON.parse(txt.replace(/```json|```/g,"").trim());
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function JobSystem() {
+  const [activePage, setActivePage] = useState("monitor");
+  const [jobs, setJobs] = useState(SEED_JOBS);
+  const [expanded, setExpanded] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterStage, setFilterStage] = useState("all");
+  const [sortBy, setSortBy] = useState("score");
+  const [screeningAll, setScreeningAll] = useState(false);
+  const [profile, setProfile] = useState({
+    experience:"1-2 yrs",tools:"Excel, SAP",minRate:"25",maxRate:"55",
+    hoursPerWeek:"40",priority:"Pay",notes:""
+  });
+  const [modal, setModal] = useState(null); // job being edited in modal
+  const [toasts, setToasts] = useState([]);
+  const toastId = useRef(0);
+  const [nextId, setNextId] = useState(20);
+
+  function toast(msg, type="default") {
+    const id = ++toastId.current;
+    setToasts(p=>[...p,{id,msg,type}]);
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3200);
+  }
+
+  function updateJob(id, patch) {
+    setJobs(p=>p.map(j=>j.id===id?{...j,...patch}:j));
+  }
+
+  async function screenOne(id) {
+    updateJob(id,{aiLoading:true});
+    try {
+      const job = jobs.find(j=>j.id===id);
+      const r = await scoreJob(job, profile);
+      updateJob(id,{
+        aiLoading:false, screened:true,
+        aiScore:r.overall, aiGrade:r.grade,
+        aiBreakdown:{payFit:r.payFit,skillFit:r.skillFit,competitionLevel:r.competitionLevel,urgencyScore:r.urgencyScore},
+        aiReason:r.reason, aiPros:r.pros, aiCons:r.cons
+      });
+      toast(`${job.company} scored: ${r.grade} (${r.overall}/100)`,"success");
+    } catch(e) {
+      updateJob(id,{aiLoading:false});
+      toast("Scoring failed — try again","warn");
+    }
+  }
+
+  async function screenAll() {
+    setScreeningAll(true);
+    const todo = jobs.filter(j=>!j.screened&&!j.aiLoading);
+    for (const j of todo) { await screenOne(j.id); await new Promise(r=>setTimeout(r,350)); }
+    setScreeningAll(false);
+    toast("All jobs screened!","success");
+  }
+
+  function moveStage(id, stage) {
+    const job = jobs.find(j=>j.id===id);
+    const patch = {stage};
+    if (stage==="applied" && !job.appliedDate) patch.appliedDate = new Date().toISOString().slice(0,10);
+    updateJob(id, patch);
+    toast(`Moved to ${STAGES.find(s=>s.id===stage)?.label}`);
+  }
+
+  function addNewJob() {
+    const j = makeJob(); j.id = nextId;
+    setJobs(p=>[j,...p]); setNextId(n=>n+1);
+    toast("New job added to monitor");
+  }
+
+  // ── MONITOR filtered list ──
+  const monitored = [...jobs]
+    .filter(j=>{
+      if (filterStage!=="all" && j.stage!==filterStage) return false;
+      if (search) {
+        const s=search.toLowerCase();
+        return j.company.toLowerCase().includes(s)||j.area.toLowerCase().includes(s)||j.platform.toLowerCase().includes(s);
+      }
+      return true;
+    })
+    .sort((a,b)=>{
+      if (sortBy==="score") return (b.aiScore??-1)-(a.aiScore??-1);
+      if (sortBy==="pay") return b.hourlyRate-a.hourlyRate;
+      if (sortBy==="weekly") return b.weeklyEarning-a.weeklyEarning;
+      return a.daysAgo-b.daysAgo;
+    });
+
+  // ── PIPELINE buckets ──
+  const pipeline = STAGES.reduce((acc,s)=>{acc[s.id]=jobs.filter(j=>j.stage===s.id);return acc;},{});
+  const inPipeline = jobs.filter(j=>j.stage!=="watchlist");
+  const offers = pipeline.offer||[];
+  const topOffer = offers.length ? Math.max(...offers.map(j=>j.offerAmount||j.hourlyRate)) : 0;
+
+  function fillCls(v){ return v>=70?"g":v>=45?"a":"r"; }
+
+  // ── MODAL save ──
+  function saveModal() {
+    if (!modal) return;
+    updateJob(modal.id, {
+      notes: modal.notes,
+      nextAction: modal.nextAction,
+      nextDate: modal.nextDate,
+      appliedDate: modal.appliedDate,
+      offerAmount: modal.offerAmount,
+      stage: modal.stage,
+    });
+    setModal(null);
+    toast("Changes saved");
+  }
+
+  // ── NAV counts ──
+  const pipelineCount = inPipeline.length;
+  const urgentCount = jobs.filter(j=>j.stage==="interview"||j.stage==="offer").length;
+
+  return (
+    <>
+      <style>{CSS}</style>
+
+      {/* NAV */}
+      <div className="nav">
+        <div className="nav-brand">CARGO<span>DESK</span></div>
+        {[
+          {id:"monitor", label:"Job Monitor"},
+          {id:"screener", label:"AI Screener"},
+          {id:"pipeline", label:"Pipeline", badge: pipelineCount},
+        ].map(t=>(
+          <button key={t.id} className={`nav-tab ${activePage===t.id?"active":""}`} onClick={()=>setActivePage(t.id)}>
+            {t.label}
+            {t.badge>0 && <span className="nav-badge">{t.badge}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ MONITOR ══════════════════════════════════════════════════════════ */}
+      {activePage==="monitor" && (
+        <div className="page">
+          <div className="monitor-header">
+            <div className="monitor-title">Job Monitor</div>
+            <div className="monitor-sub">Track all logistics data entry remote opportunities across {SHIPPING_COMPANIES.length} shipping lines</div>
+          </div>
+
+          <div className="kpi-row">
+            <div className="kpi teal"><div className="kpi-val">{jobs.length}</div><div className="kpi-lbl">Total Jobs</div></div>
+            <div className="kpi blue"><div className="kpi-val">{jobs.filter(j=>j.screened).length}</div><div className="kpi-lbl">AI Screened</div></div>
+            <div className="kpi amber"><div className="kpi-val">${jobs.length?Math.round(jobs.reduce((s,j)=>s+j.hourlyRate,0)/jobs.length):0}/hr</div><div className="kpi-lbl">Avg Rate</div></div>
+            <div className="kpi violet"><div className="kpi-val">{inPipeline.length}</div><div className="kpi-lbl">In Pipeline</div></div>
+            <div className="kpi green"><div className="kpi-val">${Math.max(...jobs.map(j=>j.hourlyRate))}/hr</div><div className="kpi-lbl">Top Rate</div></div>
+          </div>
+
+          <div className="job-controls">
+            <input className="ji grow" placeholder="Search company, area, platform…" value={search} onChange={e=>setSearch(e.target.value)}/>
+            <select className="ji" value={filterStage} onChange={e=>setFilterStage(e.target.value)}>
+              <option value="all">All Stages</option>
+              {STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+            <select className="ji" value={sortBy} onChange={e=>setSortBy(e.target.value)}>
+              <option value="score">Sort: AI Score</option>
+              <option value="pay">Sort: Pay</option>
+              <option value="weekly">Sort: Weekly $</option>
+              <option value="recent">Sort: Newest</option>
+            </select>
+            <button className="btn btn-outline btn-sm" onClick={addNewJob}>+ Add Job</button>
+          </div>
+
+          <div className="jlist-label">Showing {monitored.length} of {jobs.length} jobs</div>
+
+          {monitored.map((job,idx)=>{
+            const isOpen = expanded===job.id;
+            const grade = job.aiGrade||"none";
+            const stageInfo = STAGES.find(s=>s.id===job.stage);
+            return (
+              <div key={job.id} className="jcard" style={{animationDelay:`${Math.min(idx,10)*0.04}s`}}>
+                <div className="jcard-top" onClick={()=>setExpanded(isOpen?null:job.id)}>
+                  <div className={`jcard-score ${grade}`}>
+                    {job.aiLoading
+                      ? <div className="spin"/>
+                      : job.screened
+                        ? <><div className="grade-g">{grade}</div><div className="grade-n">{job.aiScore}</div></>
+                        : <><div className="grade-g" style={{fontSize:18}}>?</div><div className="grade-n">unscored</div></>
+                    }
+                  </div>
+                  <div className="jcard-info">
+                    <div className="jcard-co">{job.company}</div>
+                    <div className="jcard-area">{job.area}</div>
+                    <div className="jcard-tags">
+                      <span className={`jtag ${job.urgency.toLowerCase()}`}>{job.urgency}</span>
+                      <span className="jtag">{job.platform}</span>
+                      <span className="jtag">{job.experience}</span>
+                      {job.stage!=="watchlist"&&<span className="jtag stage" style={{borderColor:stageInfo?.color+"66",color:stageInfo?.color}}>{stageInfo?.icon} {stageInfo?.label}</span>}
+                    </div>
+                  </div>
+                  <div className="jcard-pay">
+                    <div className="pay-h">${job.hourlyRate}/hr</div>
+                    <div className="pay-w">${job.weeklyEarning.toLocaleString()}/wk</div>
+                    <div className="pay-w">{job.hoursPerWeek}h · {job.applicants} applicants</div>
+                  </div>
+                  <div className="jcard-btns" onClick={e=>e.stopPropagation()}>
+                    <button className="jcard-btn primary" onClick={()=>screenOne(job.id)} disabled={job.aiLoading||screeningAll}>
+                      {job.aiLoading?"…":job.screened?"Re-score":"Score"}
+                    </button>
+                    <button className={`jcard-btn ${job.stage!=="watchlist"?"active-stage":""}`}
+                      onClick={()=>{ if(job.stage==="watchlist") moveStage(job.id,"applied"); else setModal({...job}); }}>
+                      {job.stage==="watchlist"?"→ Apply":stageInfo?.label}
+                    </button>
+                  </div>
+                </div>
+                {isOpen && job.screened && (
+                  <div className="ai-panel">
+                    <div className="ai-panel-title">◈ AI Analysis — {job.aiGrade} Grade · {job.aiScore}/100</div>
+                    <div className="ai-bars">
+                      {[["Pay Fit",job.aiBreakdown.payFit],["Skill Fit",job.aiBreakdown.skillFit],["Competition",job.aiBreakdown.competitionLevel],["Urgency",job.aiBreakdown.urgencyScore]].map(([l,v])=>(
+                        <div key={l} className="ai-bar-box">
+                          <div className="ai-bar-lbl">{l}</div>
+                          <div className="ai-bar-track"><div className={`ai-bar-fill ${fillCls(v)}`} style={{width:`${v}%`}}/></div>
+                          <div className="ai-bar-val">{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="ai-reason">{job.aiReason}</div>
+                    <div className="ai-chips">
+                      {job.aiPros?.map(p=><span key={p} className="chip chip-g">✓ {p}</span>)}
+                      {job.aiCons?.map(c=><span key={c} className="chip chip-r">✗ {c}</span>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ══ SCREENER ═════════════════════════════════════════════════════════ */}
+      {activePage==="screener" && (
+        <div className="page">
+          <div className="monitor-header">
+            <div className="monitor-title">AI Screener</div>
+            <div className="monitor-sub">Set your profile — Claude scores every job for fit across pay, skills, competition & urgency</div>
+          </div>
+
+          <div className="profile-bar">
+            <div className="profile-bar-title">◈ Your Candidate Profile</div>
+            <div className="profile-grid">
+              <div className="pf">
+                <label>Experience</label>
+                <select value={profile.experience} onChange={e=>setProfile(p=>({...p,experience:e.target.value}))}>
+                  <option>Entry-level</option><option>1-2 yrs</option><option>3-5 yrs</option><option>5+ yrs</option>
+                </select>
+              </div>
+              <div className="pf">
+                <label>Min Rate $/hr</label>
+                <input type="number" value={profile.minRate} onChange={e=>setProfile(p=>({...p,minRate:e.target.value}))} placeholder="25"/>
+              </div>
+              <div className="pf">
+                <label>Max Rate $/hr</label>
+                <input type="number" value={profile.maxRate} onChange={e=>setProfile(p=>({...p,maxRate:e.target.value}))} placeholder="55"/>
+              </div>
+              <div className="pf">
+                <label>Hours / Week</label>
+                <select value={profile.hoursPerWeek} onChange={e=>setProfile(p=>({...p,hoursPerWeek:e.target.value}))}>
+                  <option>20</option><option>25</option><option>30</option><option>40</option>
+                </select>
+              </div>
+              <div className="pf">
+                <label>Priority Goal</label>
+                <select value={profile.priority} onChange={e=>setProfile(p=>({...p,priority:e.target.value}))}>
+                  <option>Pay</option><option>Stability</option><option>Low Competition</option><option>Skill Growth</option><option>Volume</option>
+                </select>
+              </div>
+              <div className="pf">
+                <label>Tools You Know</label>
+                <input value={profile.tools} onChange={e=>setProfile(p=>({...p,tools:e.target.value}))} placeholder="Excel, SAP, CargoWise…"/>
+              </div>
+              <div className="pf pf-full">
+                <label>Notes for AI</label>
+                <textarea value={profile.notes} onChange={e=>setProfile(p=>({...p,notes:e.target.value}))} placeholder="e.g. prefer < 30 applicants, open to customs clearance roles only…"/>
+              </div>
+            </div>
+            <div className="screen-row">
+              <button className="btn btn-teal" onClick={screenAll} disabled={screeningAll||jobs.every(j=>j.screened||j.aiLoading)}>
+                {screeningAll?"Screening…":`▶ Screen All ${jobs.filter(j=>!j.screened).length} Unscored Jobs`}
+              </button>
+              <button className="btn btn-outline" onClick={()=>{ setJobs(p=>p.map(j=>({...j,screened:false,aiScore:null,aiGrade:null,aiBreakdown:null,aiReason:null,aiPros:null,aiCons:null}))); toast("Scores cleared"); }}>
+                Reset Scores
+              </button>
+            </div>
+          </div>
+
+          {/* Score summary */}
+          <div className="kpi-row">
+            <div className="kpi teal"><div className="kpi-val">{jobs.filter(j=>j.screened).length}/{jobs.length}</div><div className="kpi-lbl">Screened</div></div>
+            <div className="kpi green"><div className="kpi-val">{jobs.filter(j=>j.aiGrade==="A").length}</div><div className="kpi-lbl">Grade A</div></div>
+            <div className="kpi amber"><div className="kpi-val">{jobs.filter(j=>j.aiGrade==="B").length}</div><div className="kpi-lbl">Grade B</div></div>
+            <div className="kpi" style={{"--c":"var(--red)"}}><div className="kpi-val" style={{color:"var(--red)"}}>{jobs.filter(j=>j.aiGrade==="C").length}</div><div className="kpi-lbl">Grade C</div></div>
+            <div className="kpi blue"><div className="kpi-val">{jobs.filter(j=>j.screened).length?Math.round(jobs.filter(j=>j.screened).reduce((s,j)=>s+j.aiScore,0)/jobs.filter(j=>j.screened).length):"—"}</div><div className="kpi-lbl">Avg Score</div></div>
+          </div>
+
+          {[...jobs].sort((a,b)=>(b.aiScore??-1)-(a.aiScore??-1)).map((job,idx)=>{
+            const grade=job.aiGrade||"none";
+            return (
+              <div key={job.id} className="jcard" style={{animationDelay:`${Math.min(idx,10)*0.04}s`}}>
+                <div className="jcard-top" onClick={()=>setExpanded(expanded===job.id?null:job.id)}>
+                  <div className={`jcard-score ${grade}`}>
+                    {job.aiLoading?<div className="spin"/>:job.screened
+                      ?<><div className="grade-g">{grade}</div><div className="grade-n">{job.aiScore}</div></>
+                      :<><div className="grade-g" style={{fontSize:18}}>?</div><div className="grade-n">unscored</div></>}
+                  </div>
+                  <div className="jcard-info">
+                    <div className="jcard-co">{job.company}</div>
+                    <div className="jcard-area">{job.area}</div>
+                    <div className="jcard-tags">
+                      <span className={`jtag ${job.urgency.toLowerCase()}`}>{job.urgency}</span>
+                      <span className="jtag">{job.platform}</span>
+                      <span className="jtag">{job.tools.join(" · ")}</span>
+                    </div>
+                  </div>
+                  <div className="jcard-pay">
+                    <div className="pay-h">${job.hourlyRate}/hr</div>
+                    <div className="pay-w">${job.weeklyEarning.toLocaleString()}/wk</div>
+                  </div>
+                  <div className="jcard-btns" onClick={e=>e.stopPropagation()}>
+                    <button className="jcard-btn primary" onClick={()=>screenOne(job.id)} disabled={job.aiLoading||screeningAll}>
+                      {job.aiLoading?"…":job.screened?"Re-score":"Score →"}
+                    </button>
+                    <button className="jcard-btn" onClick={()=>{ moveStage(job.id,"applied"); setActivePage("pipeline"); }}>
+                      → Pipeline
+                    </button>
+                  </div>
+                </div>
+                {expanded===job.id&&job.screened&&(
+                  <div className="ai-panel">
+                    <div className="ai-panel-title">◈ AI Analysis — {job.aiGrade} · {job.aiScore}/100</div>
+                    <div className="ai-bars">
+                      {[["Pay Fit",job.aiBreakdown.payFit],["Skill Fit",job.aiBreakdown.skillFit],["Competition",job.aiBreakdown.competitionLevel],["Urgency",job.aiBreakdown.urgencyScore]].map(([l,v])=>(
+                        <div key={l} className="ai-bar-box">
+                          <div className="ai-bar-lbl">{l}</div>
+                          <div className="ai-bar-track"><div className={`ai-bar-fill ${fillCls(v)}`} style={{width:`${v}%`}}/></div>
+                          <div className="ai-bar-val">{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="ai-reason">{job.aiReason}</div>
+                    <div className="ai-chips">
+                      {job.aiPros?.map(p=><span key={p} className="chip chip-g">✓ {p}</span>)}
+                      {job.aiCons?.map(c=><span key={c} className="chip chip-r">✗ {c}</span>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ══ PIPELINE ═════════════════════════════════════════════════════════ */}
+      {activePage==="pipeline" && (
+        <div className="page">
+          <div className="pipeline-header">
+            <div>
+              <div className="pipeline-title">Application Pipeline</div>
+              <div className="pipeline-sub">Drag jobs through your hiring journey — Watchlist → Applied → Screening → Interview → Offer</div>
+            </div>
+          </div>
+
+          {/* Pipeline stats */}
+          <div className="pipeline-stats">
+            {STAGES.map(s=>(
+              <div key={s.id} className="ps">
+                <div className="ps-icon" style={{color:s.color}}>{s.icon}</div>
+                <div className="ps-val">{pipeline[s.id]?.length||0}</div>
+                <div className="ps-lbl">{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress bar */}
+          {inPipeline.length>0 && (
+            <div className="progress-wrap">
+              <div className="progress-label">
+                <span>Pipeline Progress</span>
+                <span>{offers.length} offer{offers.length!==1?"s":""} · {topOffer>0?`Top: $${topOffer}/hr`:""}</span>
+              </div>
+              <div className="progress-track">
+                {["applied","screening","interview","offer","rejected"].map(st=>(
+                  <div key={st} className={`progress-seg ${pipeline[st]?.length>0?st==="rejected"?"rejected":st==="offer"?"offer":"done":""}`}/>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Kanban */}
+          <div className="kanban">
+            {STAGES.map(stage=>{
+              const cards = pipeline[stage.id]||[];
+              return (
+                <div key={stage.id} className="col">
+                  <div className="col-header">
+                    <div className="col-label">
+                      <div className="col-dot" style={{background:stage.color}}/>
+                      <span style={{color:stage.color}}>{stage.label}</span>
+                    </div>
+                    <div className="col-count">{cards.length}</div>
+                  </div>
+                  <div className="col-body">
+                    {cards.length===0&&(
+                      <div style={{textAlign:"center",padding:"20px 8px",fontFamily:"var(--mono)",fontSize:"9px",color:"var(--muted)",letterSpacing:"1px"}}>
+                        EMPTY
+                      </div>
+                    )}
+                    {cards.map(job=>{
+                      const nextStages = STAGES.filter(s=>s.id!==stage.id&&s.id!=="watchlist");
+                      return (
+                        <div key={job.id} className="pcard" onClick={()=>setModal({...job})}>
+                          <div className="pcard-co">{job.company}</div>
+                          <div className="pcard-area">{job.area}</div>
+                          <div className="pcard-pay">${job.hourlyRate}/hr · ${job.weeklyEarning.toLocaleString()}/wk</div>
+                          {job.aiGrade&&<div className="pcard-meta"><span>AI: {job.aiGrade} ({job.aiScore}/100)</span></div>}
+                          {job.appliedDate&&<div className="pcard-meta"><span>Applied: {job.appliedDate}</span></div>}
+                          {job.nextAction&&job.nextDate&&(
+                            <div className="pcard-next">⏰ {job.nextAction} · {job.nextDate}</div>
+                          )}
+                          {stage.id==="offer"&&job.offerAmount&&(
+                            <div className="pcard-offer">${job.offerAmount}/hr offered</div>
+                          )}
+                          <div className="pcard-move" onClick={e=>e.stopPropagation()}>
+                            {["applied","screening","interview","offer"].filter(s=>s!==stage.id).slice(0,2).map(s=>{
+                              const si=STAGES.find(x=>x.id===s);
+                              return <button key={s} className="move-btn" style={{"--hc":si.color}} onClick={()=>moveStage(job.id,s)}>{si.icon} {si.label}</button>;
+                            })}
+                            {stage.id!=="rejected"&&stage.id!=="watchlist"&&(
+                              <button className="move-btn danger" onClick={()=>moveStage(job.id,"rejected")}>✕ Reject</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ══ DETAIL MODAL ═════════════════════════════════════════════════════ */}
+      {modal && (
+        <div className="overlay" onClick={()=>setModal(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <button className="modal-close" onClick={()=>setModal(null)}>×</button>
+            <div className="modal-title">{modal.company}</div>
+            <div className="modal-co">{modal.area} · {modal.platform} · ${modal.hourlyRate}/hr</div>
+
+            <div className="modal-section">
+              <div className="modal-section-label">Stage</div>
+              <div className="stage-select-row">
+                {STAGES.map(s=>(
+                  <button key={s.id}
+                    className={`stage-pill ${modal.stage===s.id?"active-pill":""}`}
+                    style={modal.stage===s.id?{background:s.color+"22",borderColor:s.color,color:s.color}:{}}
+                    onClick={()=>setModal(m=>({...m,stage:s.id}))}>
+                    {s.icon} {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="modal-field">
+              <label>Applied Date</label>
+              <input className="modal-input" type="date" value={modal.appliedDate||""} onChange={e=>setModal(m=>({...m,appliedDate:e.target.value}))}/>
+            </div>
+            <div className="modal-field">
+              <label>Next Action</label>
+              <input className="modal-input" placeholder="e.g. Follow up, Prepare interview, Negotiate…" value={modal.nextAction||""} onChange={e=>setModal(m=>({...m,nextAction:e.target.value}))}/>
+            </div>
+            <div className="modal-field">
+              <label>Next Action Date</label>
+              <input className="modal-input" type="date" value={modal.nextDate||""} onChange={e=>setModal(m=>({...m,nextDate:e.target.value}))}/>
+            </div>
+            {modal.stage==="offer"&&(
+              <div className="modal-field">
+                <label>Offer Rate ($/hr)</label>
+                <input className="modal-input" type="number" placeholder={modal.hourlyRate} value={modal.offerAmount||""} onChange={e=>setModal(m=>({...m,offerAmount:Number(e.target.value)}))}/>
+              </div>
+            )}
+            <div className="modal-field">
+              <label>Notes</label>
+              <textarea className="modal-textarea" placeholder="Contact name, interview notes, follow-up details…" value={modal.notes||""} onChange={e=>setModal(m=>({...m,notes:e.target.value}))}/>
+            </div>
+
+            <button className="modal-save" onClick={saveModal}>Save Changes</button>
+          </div>
+        </div>
+      )}
+
+      {/* TOASTS */}
+      <div className="toast-wrap">
+        {toasts.map(t=>(
+          <div key={t.id} className={`toast ${t.type}`}>{t.msg}</div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+
+
+// ── CONSTANTS ─────────────────────────────────────────────────────────────────
+const TOOLS = [
+  "Microsoft Excel","Google Sheets","SAP","CargoWise","Oracle TMS",
+  "WMS (Warehouse Mgmt)","QuickBooks","EDI Systems","Dynamics 365",
+  "Power BI","Magaya","FreightPOP","Shipbob","ShipStation","Flexport Portal"
+];
+const AREAS = [
+  "Bill of Lading (BOL)","Freight Invoice Processing","Customs Documentation",
+  "Shipment Tracking","Rate & Tariff Entry","Manifest Data Entry",
+  "Cargo Booking","Container Management","Port of Entry Records",
+  "Carrier Reconciliation","Import/Export Compliance","Warehouse Inventory"
+];
+const CERTS = [
+  "None yet","Customs Broker License","Freight Broker License",
+  "IATA Certified","Supply Chain (APICS)","Forklift Certified",
+  "Dangerous Goods (IATA DG)","Microsoft Office Specialist"
+];
+const PLATFORMS = ["Upwork","LinkedIn","Indeed","FlexJobs","Remote.co","Fiverr","Toptal"];
+const TONES = ["Professional & Confident","Friendly & Approachable","Data-Driven & Precise","Results-Focused & Bold"];
+
+// ── STYLES ────────────────────────────────────────────────────────────────────
+const CSS = `
+
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+
+:root {
+  --bg: #faf8f3;
+  --surface: #ffffff;
+  --warm: #f5f0e6;
+  --border: #e2d9c8;
+  --border2: #c8bfad;
+  --ink: #1a1208;
+  --muted: #8a7f6e;
+  --accent: #c4601a;
+  --accent2: #2a6a4a;
+  --blue: #1a4a8a;
+  --gold: #b8860b;
+  --display: 'Playfair Display', serif;
+  --body: 'Lora', serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  min-height: 100vh;
+  background-image: radial-gradient(circle at 20% 50%, rgba(196,96,26,0.04) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(42,106,74,0.04) 0%, transparent 40%);
+}
+
+.shell { max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+
+/* HEADER */
+.hdr {
+  padding: 40px 0 28px;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 36px;
+  position: relative;
+}
+.hdr::after {
+  content: '';
+  position: absolute;
+  bottom: -5px; left: 0; right: 0;
+  border-bottom: 1px solid var(--border2);
+}
+.hdr-kicker {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.hdr-title {
+  font-family: var(--display);
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 900;
+  line-height: .95;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+.hdr-title em { color: var(--accent); font-style: normal; }
+.hdr-desc {
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 560px;
+  line-height: 1.7;
+}
+
+/* LAYOUT */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: start;
+}
+@media(max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+
+/* FORM PANEL */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.panel-head {
+  background: var(--ink);
+  padding: 14px 20px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.panel-head-num {
+  width: 22px; height: 22px;
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  color: rgba(255,255,255,.6);
+  flex-shrink: 0;
+}
+.panel-body { padding: 22px; }
+
+/* FORM ELEMENTS */
+.field { margin-bottom: 18px; }
+.field:last-child { margin-bottom: 0; }
+.field-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: block;
+}
+.field-hint { font-size: 11px; color: var(--muted); margin-top: 4px; font-style: italic; }
+
+.inp {
+  width: 100%;
+  background: var(--warm);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 13px;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(196,96,26,.08); }
+
+.ta {
+  width: 100%;
+  background: var(--warm);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 13px;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color .15s;
+}
+.ta:focus { border-color: var(--accent); }
+
+.sel {
+  width: 100%;
+  background: var(--warm);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 13px;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.sel:focus { border-color: var(--accent); }
+
+/* TAG CHECKBOXES */
+.tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag-cb { display: none; }
+.tag-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .5px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--muted);
+  background: var(--warm);
+  transition: all .12s;
+  user-select: none;
+}
+.tag-cb:checked + .tag-lbl {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+/* RANGE */
+.range-row { display: flex; gap: 10px; }
+.range-row .inp { flex: 1; }
+.range-sep { padding-top: 11px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
+
+/* PLATFORM PILLS */
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill-cb { display: none; }
+.pill-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+  color: var(--muted);
+  background: var(--warm);
+  transition: all .12s;
+}
+.pill-cb:checked + .pill-lbl {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* GENERATE BTN */
+.gen-btn {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 15px 24px;
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.gen-btn:hover { background: #b35515; transform: translateY(-1px); box-shadow: 0 4px 18px rgba(196,96,26,.25); }
+.gen-btn:disabled { background: var(--border2); cursor: not-allowed; transform: none; box-shadow: none; }
+.spin {
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: sp .7s linear infinite;
+}
+@keyframes sp { to { transform: rotate(360deg); } }
+
+/* OUTPUT PANEL */
+.out-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  position: sticky;
+  top: 20px;
+}
+.out-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--warm);
+}
+.out-tab {
+  flex: 1;
+  padding: 12px 10px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .12s;
+  text-align: center;
+}
+.out-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--surface); }
+.out-tab:hover:not(.active) { color: var(--ink); }
+
+.out-body { padding: 22px; min-height: 300px; }
+
+/* EMPTY STATE */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  text-align: center;
+  gap: 12px;
+}
+.empty-icon { font-size: 44px; opacity: .25; }
+.empty-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.empty-sub { font-size: 13px; color: var(--border2); max-width: 240px; line-height: 1.6; }
+
+/* GENERATED CONTENT */
+.gen-section { margin-bottom: 24px; }
+.gen-section:last-child { margin-bottom: 0; }
+.gen-section-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.copy-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all .12s;
+  text-transform: uppercase;
+}
+.copy-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+.copy-btn.copied { border-color: var(--accent2); color: var(--accent2); background: rgba(42,106,74,.07); }
+
+.gen-text {
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--ink);
+  white-space: pre-wrap;
+  background: var(--warm);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 14px 16px;
+}
+
+.skills-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.skill-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 2px;
+  padding: 3px 10px;
+  letter-spacing: .5px;
+}
+.skill-chip.area { background: var(--accent2); }
+.skill-chip.cert { background: var(--gold); color: var(--ink); }
+
+.rate-box {
+  background: var(--warm);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 14px 16px;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.rate-item { }
+.rate-val {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.rate-key {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.checklist { display: flex; flex-direction: column; gap: 8px; }
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.check-dot {
+  width: 18px; height: 18px;
+  border: 1px solid var(--border2);
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  color: var(--accent2);
+  cursor: pointer;
+  transition: all .12s;
+}
+.check-dot.done { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+.check-text { color: var(--ink); }
+.check-text.done-text { text-decoration: line-through; color: var(--muted); }
+
+/* PLATFORM BADGES */
+.platform-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.plat-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 4px 10px;
+  color: var(--blue);
+  border-color: rgba(26,74,138,.3);
+  background: rgba(26,74,138,.04);
+}
+
+/* TOAST */
+.toast-wrap { position: fixed; bottom: 24px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--ink);
+  color: #fff;
+  border-radius: 3px;
+  padding: 10px 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  animation: tin .25s ease;
+  max-width: 260px;
+}
+.toast.ok { background: var(--accent2); }
+@keyframes tin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* SCORE BAR */
+.score-wrap { margin-bottom: 16px; }
+.score-label { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.score-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.score-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent2), #3dbb78); transition: width .8s ease; }
+
+/* LOADING SKELETON */
+.skeleton { background: linear-gradient(90deg, var(--border) 25%, var(--warm) 50%, var(--border) 75%); background-size: 200% 100%; animation: shim 1.4s infinite; border-radius: 3px; }
+@keyframes shim { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+`;
+
+// ── CLAUDE API ────────────────────────────────────────────────────────────────
+async function generateProfile(data) {
+  const prompt = `You are an expert freelance career coach specialising in logistics and supply chain remote work. Generate a complete, compelling profile package for a logistics data entry specialist based on the input below.
+
+INPUT:
+Name: ${data.name}
+Experience: ${data.experience} years in logistics/data entry
+Tools: ${data.tools.join(", ")}
+Logistics Areas: ${data.areas.join(", ")}
+Certifications: ${data.certs}
+Target Rate: $${data.minRate}–$${data.maxRate}/hr
+Availability: ${data.hours} hrs/week
+Platforms: ${data.platforms.join(", ")}
+Tone: ${data.tone}
+Unique Selling Point: ${data.usp || "none provided"}
+Extra Notes: ${data.notes || "none"}
+
+Generate the following. Return ONLY valid JSON, no markdown, no explanation:
+
+{
+  "profileScore": 82,
+  "scoreBreakdown": {
+    "experience": 80,
+    "skills": 90,
+    "positioning": 75,
+    "rateAlignment": 85
+  },
+  "headline": "One punchy 10-12 word professional headline for the platform profile",
+  "bio": "A full 3-paragraph professional bio (150-200 words total). Paragraph 1: who they are and their specialty. Paragraph 2: specific skills and tools. Paragraph 3: call to action and availability. Make it specific to logistics data entry and their actual tools/areas.",
+  "coverLetter": "A 180-220 word cover letter template for applying to logistics data entry jobs. Include [COMPANY_NAME] and [JOB_TITLE] as placeholders. Make it specific, results-oriented, and tailored to shipping/logistics. End with a clear call to action.",
+  "skillTags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8"],
+  "rateStrategy": "2-3 sentences explaining the recommended rate strategy, when to raise rates, and how to position the rate on each platform.",
+  "launchChecklist": [
+    "Checklist item 1",
+    "Checklist item 2",
+    "Checklist item 3",
+    "Checklist item 4",
+    "Checklist item 5",
+    "Checklist item 6",
+    "Checklist item 7"
+  ],
+  "platformTips": {
+    "Upwork": "Specific 1-sentence tip for Upwork",
+    "LinkedIn": "Specific 1-sentence tip for LinkedIn",
+    "Indeed": "Specific 1-sentence tip for Indeed",
+    "FlexJobs": "Specific 1-sentence tip for FlexJobs"
+  }
+}`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2000,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  const d = await res.json();
+  const txt = d.content?.map(b => b.text || "").join("") || "";
+  return JSON.parse(txt.replace(/```json|```/g, "").trim());
+}
+
+// ── COMPONENT ─────────────────────────────────────────────────────────────────
+function ProfileBuilder() {
+  const [form, setForm] = useState({
+    name: "", experience: "1", tools: [], areas: [], certs: "None yet",
+    minRate: "22", maxRate: "35", hours: "40",
+    platforms: ["Upwork"], tone: "Professional & Confident",
+    usp: "", notes: ""
+  });
+  const [activeTab, setActiveTab] = useState("bio");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [checks, setChecks] = useState({});
+  const [toasts, setToasts] = useState([]);
+  const [copied, setCopied] = useState({});
+  let tid = 0;
+
+  function toast(msg, type = "default") {
+    const id = ++tid;
+    setToasts(p => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 2800);
+  }
+
+  function toggleArr(key, val) {
+    setForm(f => {
+      const arr = f[key];
+      return { ...f, [key]: arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val] };
+    });
+  }
+
+  async function generate() {
+    if (!form.name.trim()) { toast("Enter your name first"); return; }
+    if (form.tools.length === 0) { toast("Select at least one tool"); return; }
+    if (form.areas.length === 0) { toast("Select at least one logistics area"); return; }
+    setLoading(true);
+    setResult(null);
+    try {
+      const r = await generateProfile(form);
+      setResult(r);
+      setChecks({});
+      setActiveTab("bio");
+      toast("Profile generated!", "ok");
+    } catch (e) {
+      toast("Generation failed — try again");
+    }
+    setLoading(false);
+  }
+
+  function copyText(text, key) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(c => ({ ...c, [key]: true }));
+      toast("Copied to clipboard!", "ok");
+      setTimeout(() => setCopied(c => ({ ...c, [key]: false })), 2000);
+    });
+  }
+
+  const TABS = [
+    { id: "bio", label: "Bio" },
+    { id: "cover", label: "Cover Letter" },
+    { id: "skills", label: "Skills & Rate" },
+    { id: "checklist", label: "Launch Plan" },
+  ];
+
+  return (
+    <>
+      <style>{CSS}</style>
+      <div className="shell">
+
+        {/* HEADER */}
+        <div className="hdr">
+          <div className="hdr-kicker">Logistics Career Tool</div>
+          <h1 className="hdr-title">Profile<br /><em>Builder</em></h1>
+          <p className="hdr-desc">
+            Fill in your details — Claude generates a ready-to-paste Upwork bio,
+            cover letter, skill tags, rate strategy, and a step-by-step launch checklist.
+          </p>
+        </div>
+
+        <div className="layout">
+          {/* ── LEFT: FORM ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+            {/* SECTION 1: BASICS */}
+            <div className="panel">
+              <div className="panel-head"><div className="panel-head-num">1</div> Your Basics</div>
+              <div className="panel-body">
+                <div className="field">
+                  <label className="field-label">Full Name</label>
+                  <input className="inp" placeholder="e.g. Jordan Rivera" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div className="field">
+                  <label className="field-label">Years of Relevant Experience</label>
+                  <select className="sel" value={form.experience} onChange={e => setForm(f => ({ ...f, experience: e.target.value }))}>
+                    <option value="0">No experience yet (starting fresh)</option>
+                    <option value="1">Less than 1 year</option>
+                    <option value="2">1–2 years</option>
+                    <option value="4">3–5 years</option>
+                    <option value="7">5–10 years</option>
+                    <option value="12">10+ years</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label">Certifications / Credentials</label>
+                  <select className="sel" value={form.certs} onChange={e => setForm(f => ({ ...f, certs: e.target.value }))}>
+                    {CERTS.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label">Tone / Voice</label>
+                  <select className="sel" value={form.tone} onChange={e => setForm(f => ({ ...f, tone: e.target.value }))}>
+                    {TONES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: TOOLS */}
+            <div className="panel">
+              <div className="panel-head"><div className="panel-head-num">2</div> Tools & Software</div>
+              <div className="panel-body">
+                <div className="field">
+                  <label className="field-label">Select all tools you know</label>
+                  <div className="tag-grid">
+                    {TOOLS.map(t => (
+                      <label key={t}>
+                        <input type="checkbox" className="tag-cb" checked={form.tools.includes(t)} onChange={() => toggleArr("tools", t)} />
+                        <span className="tag-lbl">{t}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="field-hint">Pick everything — even partial knowledge counts.</div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: AREAS */}
+            <div className="panel">
+              <div className="panel-head"><div className="panel-head-num">3</div> Logistics Areas</div>
+              <div className="panel-body">
+                <div className="field">
+                  <label className="field-label">Which areas can you work in?</label>
+                  <div className="tag-grid">
+                    {AREAS.map(a => (
+                      <label key={a}>
+                        <input type="checkbox" className="tag-cb" checked={form.areas.includes(a)} onChange={() => toggleArr("areas", a)} />
+                        <span className="tag-lbl">{a}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 4: RATE & PLATFORMS */}
+            <div className="panel">
+              <div className="panel-head"><div className="panel-head-num">4</div> Rate & Platforms</div>
+              <div className="panel-body">
+                <div className="field">
+                  <label className="field-label">Target Hourly Rate (USD)</label>
+                  <div className="range-row">
+                    <input className="inp" type="number" placeholder="Min" value={form.minRate} onChange={e => setForm(f => ({ ...f, minRate: e.target.value }))} />
+                    <span className="range-sep">to</span>
+                    <input className="inp" type="number" placeholder="Max" value={form.maxRate} onChange={e => setForm(f => ({ ...f, maxRate: e.target.value }))} />
+                  </div>
+                  <div className="field-hint">Set realistic. You can raise it after 2–3 completed contracts.</div>
+                </div>
+                <div className="field">
+                  <label className="field-label">Hours Available Per Week</label>
+                  <select className="sel" value={form.hours} onChange={e => setForm(f => ({ ...f, hours: e.target.value }))}>
+                    <option value="10">10 hrs (very part-time)</option>
+                    <option value="20">20 hrs (part-time)</option>
+                    <option value="30">30 hrs (reduced full-time)</option>
+                    <option value="40">40 hrs (full-time)</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label">Target Platforms</label>
+                  <div className="pill-row">
+                    {PLATFORMS.map(p => (
+                      <label key={p}>
+                        <input type="checkbox" className="pill-cb" checked={form.platforms.includes(p)} onChange={() => toggleArr("platforms", p)} />
+                        <span className="pill-lbl">{p}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 5: USP */}
+            <div className="panel">
+              <div className="panel-head"><div className="panel-head-num">5</div> Your Edge</div>
+              <div className="panel-body">
+                <div className="field">
+                  <label className="field-label">What makes you different? (optional)</label>
+                  <textarea className="ta" placeholder="e.g. Former warehouse supervisor, fluent in Spanish and English, experience with international freight, 99% accuracy rate…" value={form.usp} onChange={e => setForm(f => ({ ...f, usp: e.target.value }))} />
+                </div>
+                <div className="field">
+                  <label className="field-label">Any extra notes for Claude? (optional)</label>
+                  <textarea className="ta" placeholder="e.g. I want to focus on Maersk / container shipping, prefer companies under 40 applicants…" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ minHeight: 60 }} />
+                </div>
+              </div>
+            </div>
+
+            <button className="gen-btn" onClick={generate} disabled={loading}>
+              {loading ? <><div className="spin" /> Generating your profile…</> : "✦ Generate My Profile"}
+            </button>
+          </div>
+
+          {/* ── RIGHT: OUTPUT ── */}
+          <div className="out-panel">
+            <div className="out-tabs">
+              {TABS.map(t => (
+                <button key={t.id} className={`out-tab ${activeTab === t.id ? "active" : ""}`} onClick={() => setActiveTab(t.id)}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="out-body">
+              {/* EMPTY */}
+              {!result && !loading && (
+                <div className="empty">
+                  <div className="empty-icon">✦</div>
+                  <div className="empty-title">Your profile lives here</div>
+                  <div className="empty-sub">Fill in the form and click Generate — Claude writes everything for you.</div>
+                </div>
+              )}
+
+              {/* LOADING */}
+              {loading && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "8px 0" }}>
+                  <div className="skeleton" style={{ height: 18, width: "60%" }} />
+                  <div className="skeleton" style={{ height: 14, width: "90%" }} />
+                  <div className="skeleton" style={{ height: 14, width: "80%" }} />
+                  <div className="skeleton" style={{ height: 14, width: "85%" }} />
+                  <div className="skeleton" style={{ height: 14, width: "70%" }} />
+                  <div style={{ height: 12 }} />
+                  <div className="skeleton" style={{ height: 14, width: "95%" }} />
+                  <div className="skeleton" style={{ height: 14, width: "88%" }} />
+                  <div className="skeleton" style={{ height: 14, width: "75%" }} />
+                  <div style={{ height: 12 }} />
+                  <div className="skeleton" style={{ height: 14, width: "82%" }} />
+                  <div className="skeleton" style={{ height: 14, width: "90%" }} />
+                </div>
+              )}
+
+              {/* BIO TAB */}
+              {result && activeTab === "bio" && (
+                <div>
+                  {/* Profile score */}
+                  <div style={{ marginBottom: 20 }}>
+                    <div className="score-wrap">
+                      <div className="score-label">
+                        <span>Profile Strength</span>
+                        <span style={{ color: "var(--accent)", fontWeight: 700 }}>{result.profileScore}/100</span>
+                      </div>
+                      <div className="score-track">
+                        <div className="score-fill" style={{ width: `${result.profileScore}%` }} />
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      {Object.entries(result.scoreBreakdown || {}).map(([k, v]) => (
+                        <div key={k} style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)" }}>
+                          <span style={{ textTransform: "capitalize", letterSpacing: "1px" }}>{k}: </span>
+                          <span style={{ color: v >= 80 ? "var(--accent2)" : v >= 60 ? "var(--gold)" : "var(--accent)" }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="gen-section">
+                    <div className="gen-section-title">
+                      Headline
+                      <button className="copy-btn" onClick={() => copyText(result.headline, "headline")}>
+                        {copied.headline ? "✓ Copied" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="gen-text" style={{ fontFamily: "var(--display)", fontSize: 15, fontWeight: 700 }}>
+                      {result.headline}
+                    </div>
+                  </div>
+
+                  <div className="gen-section">
+                    <div className="gen-section-title">
+                      Profile Bio
+                      <button className="copy-btn" onClick={() => copyText(result.bio, "bio")}>
+                        {copied.bio ? "✓ Copied" : "Copy All"}
+                      </button>
+                    </div>
+                    <div className="gen-text">{result.bio}</div>
+                  </div>
+
+                  {result.platformTips && form.platforms.length > 0 && (
+                    <div className="gen-section">
+                      <div className="gen-section-title">Platform Tips</div>
+                      {form.platforms.filter(p => result.platformTips[p]).map(p => (
+                        <div key={p} style={{ marginBottom: 8, fontSize: 12, lineHeight: 1.6 }}>
+                          <span style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "2px", textTransform: "uppercase", color: "var(--blue)", marginRight: 8 }}>{p}</span>
+                          {result.platformTips[p]}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* COVER LETTER TAB */}
+              {result && activeTab === "cover" && (
+                <div>
+                  <div className="gen-section">
+                    <div className="gen-section-title">
+                      Cover Letter Template
+                      <button className="copy-btn" onClick={() => copyText(result.coverLetter, "cover")}>
+                        {copied.cover ? "✓ Copied" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="gen-text">{result.coverLetter}</div>
+                    <div style={{ marginTop: 10, fontSize: 11, color: "var(--muted)", fontStyle: "italic", fontFamily: "var(--body)" }}>
+                      Replace [COMPANY_NAME] and [JOB_TITLE] before sending. Personalise the opening line for each application.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SKILLS & RATE TAB */}
+              {result && activeTab === "skills" && (
+                <div>
+                  <div className="gen-section">
+                    <div className="gen-section-title">Skill Tags to Add to Your Profile</div>
+                    <div className="skills-chips">
+                      {form.tools.slice(0, 4).map(t => <span key={t} className="skill-chip">{t}</span>)}
+                      {form.areas.slice(0, 4).map(a => <span key={a} className="skill-chip area">{a}</span>)}
+                      {result.skillTags?.map(s => <span key={s} className="skill-chip">{s}</span>)}
+                      {form.certs !== "None yet" && <span className="skill-chip cert">{form.certs}</span>}
+                    </div>
+                  </div>
+
+                  <div className="gen-section">
+                    <div className="gen-section-title">Earning Projection</div>
+                    <div className="rate-box">
+                      <div className="rate-item">
+                        <div className="rate-val">${form.minRate}–${form.maxRate}</div>
+                        <div className="rate-key">Per Hour</div>
+                      </div>
+                      <div className="rate-item">
+                        <div className="rate-val">${(parseInt(form.minRate) * parseInt(form.hours)).toLocaleString()}</div>
+                        <div className="rate-key">Min Weekly</div>
+                      </div>
+                      <div className="rate-item">
+                        <div className="rate-val">${(parseInt(form.maxRate) * parseInt(form.hours) * 4).toLocaleString()}</div>
+                        <div className="rate-key">Max Monthly</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="gen-section">
+                    <div className="gen-section-title">Rate Strategy</div>
+                    <div className="gen-text">{result.rateStrategy}</div>
+                  </div>
+
+                  <div className="gen-section">
+                    <div className="gen-section-title">Target Platforms</div>
+                    <div className="platform-badges">
+                      {form.platforms.map(p => <span key={p} className="plat-badge">{p}</span>)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* LAUNCH CHECKLIST TAB */}
+              {result && activeTab === "checklist" && (
+                <div>
+                  <div className="gen-section">
+                    <div className="gen-section-title">
+                      Your Launch Checklist
+                      <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--accent2)" }}>
+                        {Object.values(checks).filter(Boolean).length}/{result.launchChecklist?.length || 0} done
+                      </span>
+                    </div>
+                    <div className="checklist">
+                      {result.launchChecklist?.map((item, i) => (
+                        <div key={i} className="check-item">
+                          <div
+                            className={`check-dot ${checks[i] ? "done" : ""}`}
+                            onClick={() => setChecks(c => ({ ...c, [i]: !c[i] }))}
+                          >
+                            {checks[i] ? "✓" : ""}
+                          </div>
+                          <span className={`check-text ${checks[i] ? "done-text" : ""}`}>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {Object.values(checks).filter(Boolean).length === (result.launchChecklist?.length || 0) && result.launchChecklist?.length > 0 && (
+                    <div style={{
+                      background: "rgba(42,106,74,.08)", border: "1px solid rgba(42,106,74,.3)",
+                      borderRadius: 3, padding: "14px 16px", textAlign: "center",
+                      fontFamily: "var(--display)", fontSize: 17, color: "var(--accent2)"
+                    }}>
+                      ✓ All done — time to apply and start earning!
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* TOASTS */}
+      <div className="toast-wrap">
+        {toasts.map(t => <div key={t.id} className={`toast ${t.type}`}>{t.msg}</div>)}
+      </div>
+    </>
+  );
+}
+
+
+const { useState } = React;
+
+const APP_CSS = `
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#0b0f1a;--s1:#111827;--border:#2a3a54;--text:#c9d8f0;
+    --muted:#4d6180;--white:#f0f6ff;--teal:#2dd4bf;
+    --display:'Archivo Black',sans-serif;--mono:'Roboto Mono',monospace;
+  }
+  html,body,#root{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--mono);}
+  .appbar{background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;position:sticky;top:0;z-index:100;flex-wrap:wrap;}
+  .appbar-brand{font-family:var(--display);font-size:20px;color:var(--white);padding:16px 0;margin-right:32px;letter-spacing:.5px;cursor:pointer;}
+  .appbar-brand span{color:var(--teal);}
+  .appbar-tabs{display:flex;flex:1;flex-wrap:wrap;}
+  .appbar-tab{padding:18px 16px 16px;font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;}
+  .appbar-tab:hover{color:var(--text);}
+  .appbar-tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+  .home{max-width:1100px;margin:0 auto;padding:60px 24px 80px;}
+  .home-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:4px;text-transform:uppercase;color:var(--teal);margin-bottom:16px;}
+  .home-title{font-family:var(--display);font-size:clamp(38px,8vw,80px);color:var(--white);line-height:.92;margin-bottom:24px;}
+  .home-title em{color:var(--teal);font-style:normal;}
+  .home-desc{font-size:15px;color:var(--muted);line-height:1.8;max-width:540px;margin-bottom:52px;}
+  .home-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:52px;}
+  @media(max-width:640px){.home-grid{grid-template-columns:1fr;}}
+  .home-card{background:var(--s1);border:1px solid var(--border);border-radius:6px;padding:24px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;}
+  .home-card:hover{border-color:var(--teal);transform:translateY(-2px);box-shadow:0 8px 32px rgba(45,212,191,.08);}
+  .home-card-icon{font-size:32px;margin-bottom:14px;}
+  .home-card-title{font-family:var(--display);font-size:20px;color:var(--white);margin-bottom:8px;}
+  .home-card-desc{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:16px;}
+  .home-card-link{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);}
+  .home-steps{background:var(--s1);border:1px solid var(--border);border-radius:6px;padding:28px;}
+  .home-steps-title{font-family:var(--display);font-size:18px;color:var(--white);margin-bottom:20px;}
+  .step-list{display:flex;flex-direction:column;gap:14px;}
+  .step-item{display:flex;gap:16px;align-items:flex-start;}
+  .step-num{width:28px;height:28px;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:13px;color:var(--teal);flex-shrink:0;}
+  .step-text{font-size:13px;color:var(--text);line-height:1.6;padding-top:3px;}
+  .step-text strong{color:var(--white);}
+  .home-footer{margin-top:52px;padding-top:24px;border-top:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+`;
+
+const HOME_CARDS = [
+  {id:"system",icon:"📦",title:"Job Monitor + Pipeline",desc:"Track 20 shipping companies, AI-score every listing, and manage your full application pipeline from Watchlist to Offer.",link:"Open Monitor →"},
+  {id:"profile",icon:"✦",title:"Profile Builder",desc:"Answer 5 quick questions — Claude writes your Upwork bio, cover letter, skill tags, rate strategy and launch checklist.",link:"Build Profile →"},
+];
+
+const STEPS = [
+  {num:"1",text:<><strong>Build your profile</strong> — use the Profile Builder to generate your bio, headline and cover letter in 2 minutes.</>},
+  {num:"2",text:<><strong>Score jobs</strong> — open the Job Monitor, set your candidate profile, and let Claude rank every listing for fit.</>},
+  {num:"3",text:<><strong>Apply fast</strong> — target Grade A jobs on We Work Remotely, Remote OK and Remotive. All free, all remote-only.</>},
+  {num:"4",text:<><strong>Track everything</strong> — move applications through the Pipeline so nothing slips.</>},
+  {num:"5",text:<><strong>Get paid</strong> — set up Payoneer or Wise before your first contract. First payment typically arrives within 2 weeks.</>},
+];
+
+function App() {
+  const [page, setPage] = useState("home");
+  return (
+    <>
+      <style>{APP_CSS}</style>
+      <div className="appbar">
+        <div className="appbar-brand" onClick={()=>setPage("home")}>CARGO<span>DESK</span></div>
+        <div className="appbar-tabs">
+          {[{id:"home",label:"Home"},{id:"system",label:"Job Monitor"},{id:"profile",label:"Profile Builder"}].map(t=>(
+            <button key={t.id} className={`appbar-tab ${page===t.id?"active":""}`} onClick={()=>setPage(t.id)}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+      {page==="home"&&(
+        <div className="home">
+          <div className="home-eyebrow">Logistics Remote Income System</div>
+          <h1 className="home-title">YOUR PATH TO<br/><em>REMOTE INCOME</em><br/>IN LOGISTICS</h1>
+          <p className="home-desc">A complete toolkit for finding, screening, applying for and tracking remote data entry jobs across the world's top shipping and logistics companies.</p>
+          <div className="home-grid">
+            {HOME_CARDS.map(card=>(
+              <div key={card.id} className="home-card" onClick={()=>setPage(card.id)}>
+                <div className="home-card-icon">{card.icon}</div>
+                <div className="home-card-title">{card.title}</div>
+                <div className="home-card-desc">{card.desc}</div>
+                <div className="home-card-link">{card.link}</div>
+              </div>
+            ))}
+          </div>
+          <div className="home-steps">
+            <div className="home-steps-title">Your 5-Step Launch Plan</div>
+            <div className="step-list">
+              {STEPS.map(s=>(
+                <div key={s.num} className="step-item">
+                  <div className="step-num">{s.num}</div>
+                  <div className="step-text">{s.text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="home-footer">
+            <span>CARGODESK v1.0 — Logistics Remote Income System</span>
+            <span>Powered by Claude AI · Built for remote workers worldwide</span>
+          </div>
+        </div>
+      )}
+      {page==="system"&&<JobSystem/>}
+      {page==="profile"&&<ProfileBuilder/>}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>
