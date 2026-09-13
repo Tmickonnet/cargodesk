@@ -1,6 +1,54 @@
-import React from "react";
+import React, { useState } from "react";
+
+const navigationGroups = [
+  {
+    title: "Operations",
+    items: [
+      "Dashboard",
+      "Shipments",
+      "Documentation",
+      "Containers",
+      "Warehouse",
+      "Shipping",
+      "Delivery",
+    ],
+  },
+  {
+    title: "Management",
+    items: ["Reports", "Audit Log", "Settings"],
+  },
+];
+
+const moduleDescriptions = {
+  Shipments:
+    "Create, monitor and manage logistics shipments from booking through final delivery.",
+  Documentation:
+    "Manage commercial, export, shipping and compliance documentation associated with shipments.",
+  Containers:
+    "Monitor container allocation, stuffing, movement, status and shipment visibility.",
+  Warehouse:
+    "Coordinate warehouse activities, cargo preparation, loading and stuffing operations.",
+  Shipping:
+    "Monitor vessel bookings, shipping-line activities, terminal operations and movement milestones.",
+  Delivery:
+    "Track delivery activities from port or terminal release through final destination.",
+  Reports:
+    "View operational reports and logistics performance information.",
+  "Audit Log":
+    "Review recorded operational and security activities across the CargoDesk platform.",
+  Settings:
+    "Manage application preferences and configuration.",
+};
 
 function App() {
+  const [activePage, setActivePage] = useState("Dashboard");
+
+  const handleNavigation = (page) => {
+    setActivePage(page);
+  };
+
+  const isDashboard = activePage === "Dashboard";
+
   return (
     <div
       style={{
@@ -11,7 +59,7 @@ function App() {
           "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }}
     >
-      {/* Top Header */}
+      {/* Header */}
       <header
         style={{
           height: "72px",
@@ -49,7 +97,7 @@ function App() {
         </div>
       </header>
 
-      {/* Main Application Area */}
+      {/* Application */}
       <div style={{ display: "flex", minHeight: "calc(100vh - 72px)" }}>
         {/* Sidebar */}
         <aside
@@ -60,186 +108,226 @@ function App() {
             padding: "24px 16px",
           }}
         >
-          <div
-            style={{
-              fontSize: "11px",
-              fontWeight: "700",
-              color: "#7a8799",
-              textTransform: "uppercase",
-              marginBottom: "12px",
-              paddingLeft: "12px",
-            }}
-          >
-            Operations
-          </div>
+          {navigationGroups.map((group) => (
+            <div key={group.title} style={{ marginBottom: "28px" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "700",
+                  color: "#7a8799",
+                  textTransform: "uppercase",
+                  marginBottom: "12px",
+                  paddingLeft: "12px",
+                }}
+              >
+                {group.title}
+              </div>
 
-          {[
-            "Dashboard",
-            "Shipments",
-            "Documentation",
-            "Containers",
-            "Warehouse",
-            "Shipping",
-            "Delivery",
-          ].map((item, index) => (
-            <div
-              key={item}
-              style={{
-                padding: "12px",
-                borderRadius: "8px",
-                marginBottom: "5px",
-                background: index === 0 ? "#eaf3ff" : "transparent",
-                color: index === 0 ? "#1261b5" : "#445166",
-                fontWeight: index === 0 ? "600" : "500",
-                fontSize: "14px",
-                cursor: "default",
-              }}
-            >
-              {item}
-            </div>
-          ))}
+              {group.items.map((item) => {
+                const active = activePage === item;
 
-          <div
-            style={{
-              fontSize: "11px",
-              fontWeight: "700",
-              color: "#7a8799",
-              textTransform: "uppercase",
-              marginTop: "28px",
-              marginBottom: "12px",
-              paddingLeft: "12px",
-            }}
-          >
-            Management
-          </div>
-
-          {["Reports", "Audit Log", "Settings"].map((item) => (
-            <div
-              key={item}
-              style={{
-                padding: "12px",
-                borderRadius: "8px",
-                marginBottom: "5px",
-                color: "#445166",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              {item}
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => handleNavigation(item)}
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      textAlign: "left",
+                      padding: "12px",
+                      borderRadius: "8px",
+                      marginBottom: "5px",
+                      background: active ? "#eaf3ff" : "transparent",
+                      color: active ? "#1261b5" : "#445166",
+                      fontWeight: active ? "600" : "500",
+                      fontSize: "14px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {item}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </aside>
 
-        {/* Dashboard Content */}
+        {/* Main Content */}
         <main style={{ flex: 1, padding: "32px" }}>
-          <div style={{ marginBottom: "28px" }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "28px",
-                fontWeight: "700",
-                color: "#172033",
-              }}
-            >
-              Logistics Dashboard
-            </h1>
+          {isDashboard ? (
+            <>
+              <div style={{ marginBottom: "28px" }}>
+                <h1
+                  style={{
+                    margin: 0,
+                    fontSize: "28px",
+                    fontWeight: "700",
+                  }}
+                >
+                  Logistics Dashboard
+                </h1>
 
-            <p
-              style={{
-                marginTop: "8px",
-                color: "#68758a",
-                fontSize: "14px",
-              }}
-            >
-              Monitor shipments, documentation, containers and delivery
-              operations from one workspace.
-            </p>
-          </div>
+                <p
+                  style={{
+                    marginTop: "8px",
+                    color: "#68758a",
+                    fontSize: "14px",
+                  }}
+                >
+                  Monitor shipments, documentation, containers and delivery
+                  operations from one workspace.
+                </p>
+              </div>
 
-          {/* Summary Cards */}
-          <section
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: "18px",
-              marginBottom: "28px",
-            }}
-          >
-            {[
-              ["Active Shipments", "0"],
-              ["Pending Documents", "0"],
-              ["Containers in Transit", "0"],
-              ["Pending Deliveries", "0"],
-            ].map(([label, value]) => (
-              <div
-                key={label}
+              {/* Summary Cards */}
+              <section
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(190px, 1fr))",
+                  gap: "18px",
+                  marginBottom: "28px",
+                }}
+              >
+                {[
+                  ["Active Shipments", "0"],
+                  ["Pending Documents", "0"],
+                  ["Containers in Transit", "0"],
+                  ["Pending Deliveries", "0"],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #e1e7ef",
+                      borderRadius: "12px",
+                      padding: "20px",
+                      boxShadow: "0 2px 6px rgba(20,40,70,0.04)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "#6c788b",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {label}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "28px",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {value}
+                    </div>
+                  </div>
+                ))}
+              </section>
+
+              <section
                 style={{
                   background: "#ffffff",
                   border: "1px solid #e1e7ef",
                   borderRadius: "12px",
-                  padding: "20px",
+                  padding: "24px",
+                  minHeight: "300px",
+                }}
+              >
+                <h2
+                  style={{
+                    margin: "0 0 8px",
+                    fontSize: "18px",
+                  }}
+                >
+                  Operations Overview
+                </h2>
+
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#68758a",
+                    fontSize: "14px",
+                  }}
+                >
+                  Your logistics workspace is ready. Shipment, documentation,
+                  container, warehouse, shipping and delivery modules will
+                  appear here as they are connected.
+                </p>
+              </section>
+            </>
+          ) : (
+            <>
+              <div style={{ marginBottom: "28px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleNavigation("Dashboard")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "#1261b5",
+                    padding: 0,
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    marginBottom: "18px",
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+
+                <h1
+                  style={{
+                    margin: 0,
+                    fontSize: "28px",
+                    fontWeight: "700",
+                  }}
+                >
+                  {activePage}
+                </h1>
+
+                <p
+                  style={{
+                    marginTop: "8px",
+                    color: "#68758a",
+                    fontSize: "14px",
+                  }}
+                >
+                  {moduleDescriptions[activePage]}
+                </p>
+              </div>
+
+              <section
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e1e7ef",
+                  borderRadius: "12px",
+                  padding: "28px",
+                  minHeight: "320px",
                   boxShadow: "0 2px 6px rgba(20,40,70,0.04)",
                 }}
               >
                 <div
                   style={{
-                    fontSize: "13px",
-                    color: "#6c788b",
-                    marginBottom: "12px",
+                    display: "inline-block",
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    background: "#eef5ff",
+                    color: "#1261b5",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    marginBottom: "16px",
                   }}
                 >
-                  {label}
+                  MODULE READY
                 </div>
 
-                <div
+                <h2
                   style={{
-                    fontSize: "28px",
-                    fontWeight: "700",
-                    color: "#172033",
+                    margin: "0 0 10px",
+                    fontSize: "20px",
                   }}
                 >
-                  {value}
-                </div>
-              </div>
-            ))}
-          </section>
-
-          {/* Main Workspace */}
-          <section
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e1e7ef",
-              borderRadius: "12px",
-              padding: "24px",
-              minHeight: "300px",
-            }}
-          >
-            <h2
-              style={{
-                margin: "0 0 8px",
-                fontSize: "18px",
-                color: "#172033",
-              }}
-            >
-              Operations Overview
-            </h2>
-
-            <p
-              style={{
-                margin: 0,
-                color: "#68758a",
-                fontSize: "14px",
-              }}
-            >
-              Your logistics workspace is ready. Shipment, documentation,
-              container, warehouse, shipping and delivery modules will appear
-              here as they are connected.
-            </p>
-          </section>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-export default App;
