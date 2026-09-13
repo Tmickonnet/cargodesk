@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "./lib/supabase";
 
 const navigationGroups = [
   {
@@ -65,6 +66,44 @@ const dashboardCards = [
 
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initializeAuth = async () => {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        console.error("CargoDesk authentication check failed:", error);
+        setSession(null);
+      } else {
+        setSession(data.session ?? null);
+      }
+
+      setAuthLoading(false);
+    };
+
+    initializeAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      if (isMounted) {
+        setSession(currentSession ?? null);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const isDashboard = activePage === "Dashboard";
 
@@ -121,19 +160,52 @@ function App() {
 
         <div
           style={{
-            width: "40px",
-            height: "40px",
-            borderRadius: "50%",
-            background: "#173b6c",
-            color: "#ffffff",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            fontWeight: "700",
-            fontSize: "14px",
+            gap: "12px",
           }}
         >
-          CD
+          <div
+            style={{
+              padding: "7px 11px",
+              borderRadius: "20px",
+              background: authLoading
+                ? "#f0f4f8"
+                : session
+                  ? "#e6f4ea"
+                  : "#f0f4f8",
+              color: authLoading
+                ? "#627d98"
+                : session
+                  ? "#1f7a5a"
+                  : "#627d98",
+              fontSize: "11px",
+              fontWeight: "600",
+            }}
+          >
+            {authLoading
+              ? "Checking session..."
+              : session
+                ? "Authenticated"
+                : "Not signed in"}
+          </div>
+
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "50%",
+              background: "#173b6c",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: "700",
+              fontSize: "14px",
+            }}
+          >
+            CD
+          </div>
         </div>
       </header>
 
@@ -203,9 +275,7 @@ function App() {
                       marginBottom: "4px",
                       textAlign: "left",
                       cursor: "pointer",
-                      background: isActive
-                        ? "#1f5f95"
-                        : "transparent",
+                      background: isActive ? "#1f5f95" : "transparent",
                       color: isActive ? "#ffffff" : "#d9e2ec",
                       fontSize: "14px",
                       fontWeight: isActive ? "600" : "500",
