@@ -21,110 +21,174 @@ const navigationGroups = [
 
 const moduleDescriptions = {
   Shipments:
-    "Create, monitor and manage logistics shipments from booking through final delivery.",
+    "Create, monitor, track, and manage shipment activities from booking through final delivery.",
   Documentation:
-    "Manage commercial, export, shipping and compliance documentation associated with shipments.",
+    "Manage commercial, export, shipping, terminal, customs, and delivery documentation.",
   Containers:
-    "Monitor container allocation, stuffing, movement, status and shipment visibility.",
+    "Monitor container allocation, stuffing, movement, shipping status, and delivery visibility.",
   Warehouse:
-    "Coordinate warehouse activities, cargo preparation, loading and stuffing operations.",
+    "Coordinate warehouse activities, cargo preparation, loading, stuffing, and inventory movement.",
   Shipping:
-    "Monitor vessel bookings, shipping-line activities, terminal operations and movement milestones.",
+    "Manage shipping-line activities, vessel information, bookings, bills of lading, and sailing status.",
   Delivery:
-    "Track delivery activities from port or terminal release through final destination.",
+    "Monitor delivery planning, transportation coordination, proof of delivery, and completion status.",
   Reports:
-    "View operational reports and logistics performance information.",
+    "Access operational reports, shipment performance information, documentation status, and logistics analysis.",
   "Audit Log":
-    "Review recorded operational and security activities across the CargoDesk platform.",
+    "Review system activities and maintain an auditable record of important operational changes.",
   Settings:
-    "Manage application preferences and configuration.",
+    "Manage application preferences and future configuration options for CargoDesk Global.",
 };
+
+const dashboardCards = [
+  {
+    title: "Active Shipments",
+    value: "0",
+    description: "Shipments currently being monitored",
+  },
+  {
+    title: "Pending Documents",
+    value: "0",
+    description: "Documents requiring attention",
+  },
+  {
+    title: "Containers in Transit",
+    value: "0",
+    description: "Containers currently moving",
+  },
+  {
+    title: "Pending Deliveries",
+    value: "0",
+    description: "Deliveries awaiting completion",
+  },
+];
 
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
 
-  const handleNavigation = (page) => {
-    setActivePage(page);
-  };
-
   const isDashboard = activePage === "Dashboard";
+
+  const handleNavigation = (item) => {
+    setActivePage(item);
+  };
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#f4f7fb",
+        background: "#f5f7fb",
         color: "#172033",
         fontFamily:
-          "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
       }}
     >
       {/* Header */}
       <header
         style={{
           height: "72px",
-          background: "#0b1f3a",
-          color: "#ffffff",
+          background: "#ffffff",
+          borderBottom: "1px solid #e5e9f0",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 28px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
         }}
       >
         <div>
-          <div style={{ fontSize: "21px", fontWeight: "700" }}>
+          <div
+            style={{
+              fontSize: "21px",
+              fontWeight: "700",
+              color: "#173b6c",
+            }}
+          >
             CargoDesk Global
           </div>
-          <div style={{ fontSize: "12px", opacity: 0.75 }}>
+
+          <div
+            style={{
+              marginTop: "3px",
+              fontSize: "12px",
+              color: "#718096",
+            }}
+          >
             Logistics Operations Platform
           </div>
         </div>
 
         <div
           style={{
-            width: "38px",
-            height: "38px",
+            width: "40px",
+            height: "40px",
             borderRadius: "50%",
-            background: "#1d72d8",
+            background: "#173b6c",
+            color: "#ffffff",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontWeight: "700",
+            fontSize: "14px",
           }}
         >
           CD
         </div>
       </header>
 
-      {/* Application */}
-      <div style={{ display: "flex", minHeight: "calc(100vh - 72px)" }}>
+      <div
+        style={{
+          display: "flex",
+          minHeight: "calc(100vh - 72px)",
+        }}
+      >
         {/* Sidebar */}
         <aside
           style={{
-            width: "240px",
-            background: "#ffffff",
-            borderRight: "1px solid #e1e7ef",
-            padding: "24px 16px",
+            width: "245px",
+            background: "#102a43",
+            color: "#ffffff",
+            padding: "24px 14px",
+            flexShrink: 0,
           }}
         >
+          <div
+            style={{
+              padding: "0 12px 20px",
+              borderBottom: "1px solid rgba(255,255,255,0.12)",
+              marginBottom: "20px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: "700",
+                letterSpacing: "1px",
+                color: "#9fb3c8",
+              }}
+            >
+              CONTROL CENTER
+            </div>
+          </div>
+
           {navigationGroups.map((group) => (
-            <div key={group.title} style={{ marginBottom: "28px" }}>
+            <div key={group.title} style={{ marginBottom: "25px" }}>
               <div
                 style={{
+                  padding: "0 12px 9px",
                   fontSize: "11px",
                   fontWeight: "700",
-                  color: "#7a8799",
+                  letterSpacing: "0.8px",
+                  color: "#829ab1",
                   textTransform: "uppercase",
-                  marginBottom: "12px",
-                  paddingLeft: "12px",
                 }}
               >
                 {group.title}
               </div>
 
               {group.items.map((item) => {
-                const active = activePage === item;
+                const isActive = activePage === item;
 
                 return (
                   <button
@@ -134,15 +198,18 @@ function App() {
                     style={{
                       width: "100%",
                       border: "none",
-                      textAlign: "left",
-                      padding: "12px",
                       borderRadius: "8px",
-                      marginBottom: "5px",
-                      background: active ? "#eaf3ff" : "transparent",
-                      color: active ? "#1261b5" : "#445166",
-                      fontWeight: active ? "600" : "500",
-                      fontSize: "14px",
+                      padding: "11px 12px",
+                      marginBottom: "4px",
+                      textAlign: "left",
                       cursor: "pointer",
+                      background: isActive
+                        ? "#1f5f95"
+                        : "transparent",
+                      color: isActive ? "#ffffff" : "#d9e2ec",
+                      fontSize: "14px",
+                      fontWeight: isActive ? "600" : "500",
+                      transition: "background 0.15s ease",
                     }}
                   >
                     {item}
@@ -154,93 +221,139 @@ function App() {
         </aside>
 
         {/* Main Content */}
-        <main style={{ flex: 1, padding: "32px" }}>
+        <main
+          style={{
+            flex: 1,
+            padding: "30px",
+            minWidth: 0,
+          }}
+        >
           {isDashboard ? (
             <>
-              <div style={{ marginBottom: "28px" }}>
+              {/* Dashboard heading */}
+              <div
+                style={{
+                  marginBottom: "25px",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#627d98",
+                    marginBottom: "7px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.6px",
+                  }}
+                >
+                  Overview
+                </div>
+
                 <h1
                   style={{
                     margin: 0,
                     fontSize: "28px",
-                    fontWeight: "700",
+                    color: "#173b6c",
                   }}
                 >
-                  Logistics Dashboard
+                  Dashboard
                 </h1>
 
                 <p
                   style={{
-                    marginTop: "8px",
-                    color: "#68758a",
+                    margin: "8px 0 0",
+                    color: "#627d98",
                     fontSize: "14px",
                   }}
                 >
-                  Monitor shipments, documentation, containers and delivery
-                  operations from one workspace.
+                  Monitor your logistics operations from one central workspace.
                 </p>
               </div>
 
-              {/* Summary Cards */}
-              <section
+              {/* Dashboard cards */}
+              <div
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "repeat(auto-fit, minmax(190px, 1fr))",
+                    "repeat(auto-fit, minmax(210px, 1fr))",
                   gap: "18px",
                   marginBottom: "28px",
                 }}
               >
-                {[
-                  ["Active Shipments", "0"],
-                  ["Pending Documents", "0"],
-                  ["Containers in Transit", "0"],
-                  ["Pending Deliveries", "0"],
-                ].map(([label, value]) => (
+                {dashboardCards.map((card) => (
                   <div
-                    key={label}
+                    key={card.title}
                     style={{
                       background: "#ffffff",
-                      border: "1px solid #e1e7ef",
+                      border: "1px solid #e5e9f0",
                       borderRadius: "12px",
                       padding: "20px",
-                      boxShadow: "0 2px 6px rgba(20,40,70,0.04)",
+                      boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
                     }}
                   >
                     <div
                       style={{
                         fontSize: "13px",
-                        color: "#6c788b",
+                        color: "#627d98",
+                        fontWeight: "600",
                         marginBottom: "12px",
                       }}
                     >
-                      {label}
+                      {card.title}
                     </div>
 
                     <div
                       style={{
-                        fontSize: "28px",
+                        fontSize: "30px",
+                        lineHeight: 1,
                         fontWeight: "700",
+                        color: "#173b6c",
+                        marginBottom: "10px",
                       }}
                     >
-                      {value}
+                      {card.value}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#829ab1",
+                      }}
+                    >
+                      {card.description}
                     </div>
                   </div>
                 ))}
-              </section>
+              </div>
 
+              {/* Operations overview */}
               <section
                 style={{
                   background: "#ffffff",
-                  border: "1px solid #e1e7ef",
+                  border: "1px solid #e5e9f0",
                   borderRadius: "12px",
                   padding: "24px",
-                  minHeight: "300px",
+                  boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
                 }}
               >
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#627d98",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.6px",
+                  }}
+                >
+                  Operations
+                </div>
+
                 <h2
                   style={{
-                    margin: "0 0 8px",
-                    fontSize: "18px",
+                    margin: "0 0 10px",
+                    fontSize: "20px",
+                    color: "#173b6c",
                   }}
                 >
                   Operations Overview
@@ -249,85 +362,128 @@ function App() {
                 <p
                   style={{
                     margin: 0,
-                    color: "#68758a",
+                    color: "#627d98",
                     fontSize: "14px",
+                    lineHeight: 1.7,
                   }}
                 >
-                  Your logistics workspace is ready. Shipment, documentation,
-                  container, warehouse, shipping and delivery modules will
-                  appear here as they are connected.
+                  CargoDesk Global is being developed as a centralized
+                  logistics operations platform for shipment management,
+                  documentation, container visibility, warehouse coordination,
+                  shipping activities, delivery management, reporting, and
+                  auditability.
                 </p>
               </section>
             </>
           ) : (
             <>
-              <div style={{ marginBottom: "28px" }}>
+              {/* Module workspace */}
+              <div
+                style={{
+                  marginBottom: "22px",
+                }}
+              >
                 <button
                   type="button"
-                  onClick={() => handleNavigation("Dashboard")}
+                  onClick={() => setActivePage("Dashboard")}
                   style={{
                     border: "none",
                     background: "transparent",
-                    color: "#1261b5",
                     padding: 0,
-                    fontSize: "14px",
-                    fontWeight: "600",
                     cursor: "pointer",
-                    marginBottom: "18px",
+                    color: "#1f5f95",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginBottom: "20px",
                   }}
                 >
                   ← Back to Dashboard
                 </button>
 
-                <h1
-                  style={{
-                    margin: 0,
-                    fontSize: "28px",
-                    fontWeight: "700",
-                  }}
-                >
-                  {activePage}
-                </h1>
-
-                <p
-                  style={{
-                    marginTop: "8px",
-                    color: "#68758a",
-                    fontSize: "14px",
-                  }}
-                >
-                  {moduleDescriptions[activePage]}
-                </p>
-              </div>
-
-              <section
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #e1e7ef",
-                  borderRadius: "12px",
-                  padding: "28px",
-                  minHeight: "320px",
-                  boxShadow: "0 2px 6px rgba(20,40,70,0.04)",
-                }}
-              >
                 <div
                   style={{
-                    display: "inline-block",
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    background: "#eef5ff",
-                    color: "#1261b5",
-                    fontSize: "12px",
-                    fontWeight: "600",
-                    marginBottom: "16px",
+                    background: "#ffffff",
+                    border: "1px solid #e5e9f0",
+                    borderRadius: "12px",
+                    padding: "28px",
+                    boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
                   }}
                 >
-                  MODULE READY
-                </div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#1f7a5a",
+                      marginBottom: "16px",
+                      letterSpacing: "0.7px",
+                    }}
+                  >
+                    MODULE READY
+                  </div>
 
-                <h2
-                  style={{
-                    margin: "0 0 10px",
-                    fontSize: "20px",
-                  }}
-                >
+                  <h2
+                    style={{
+                      margin: "0 0 10px",
+                      fontSize: "24px",
+                      color: "#173b6c",
+                    }}
+                  >
+                    {activePage}
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      maxWidth: "760px",
+                      color: "#627d98",
+                      fontSize: "14px",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {moduleDescriptions[activePage] ||
+                      "This CargoDesk Global module is ready for controlled implementation."}
+                  </p>
+
+                  <div
+                    style={{
+                      marginTop: "24px",
+                      padding: "18px",
+                      background: "#f5f7fb",
+                      borderRadius: "8px",
+                      border: "1px solid #e5e9f0",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: "#334e68",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      Implementation status
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "#627d98",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Navigation is active. The operational interface and
+                      database-connected functionality for this module will be
+                      introduced through controlled implementation steps.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export default App;
