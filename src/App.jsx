@@ -69,12 +69,60 @@ function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+
   const [connectionStatus, setConnectionStatus] =
     useState("Checking database...");
   const [connectionMessage, setConnectionMessage] = useState("");
 
   useEffect(() => {
     let isMounted = true;
+
+    const checkAuthenticatedDatabase = async (currentSession) => {
+      if (!currentSession) {
+        if (isMounted) {
+          setConnectionStatus("Supabase reachable");
+          setConnectionMessage(
+            "Database access requires authentication. CargoDesk security is active."
+          );
+        }
+        return;
+      }
+
+      const {
+        data: statusData,
+        error: statusError,
+      } = await supabase
+        .from("shipment_statuses")
+        .select("*")
+        .limit(1);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (statusError) {
+        console.error(
+          "CargoDesk Supabase database connection test failed:",
+          statusError
+        );
+
+        setConnectionStatus("Database connection requires attention");
+        setConnectionMessage(
+          statusError.message || "Supabase database test failed."
+        );
+      } else {
+        setConnectionStatus("Supabase connected");
+        setConnectionMessage(
+          statusData?.length
+            ? "CargoDesk can communicate with the logistics database."
+            : "Authenticated Supabase connection is working, but no shipment-status row was returned."
+        );
+      }
+    };
 
     const initializeAuthAndDatabase = async () => {
       const { data, error } = await supabase.auth.getSession();
@@ -94,59 +142,35 @@ function App() {
         );
       } else {
         setSession(currentSession);
-
-        if (!currentSession) {
-          setConnectionStatus("Supabase reachable");
-          setConnectionMessage(
-            "Database access requires authentication. CargoDesk security is active."
-          );
-        } else {
-          const {
-            data: statusData,
-            error: statusError,
-          } = await supabase
-            .from("shipment_statuses")
-            .select("*")
-            .limit(1);
-
-          if (!isMounted) {
-            return;
-          }
-
-          if (statusError) {
-            console.error(
-              "CargoDesk Supabase database connection test failed:",
-              statusError
-            );
-
-            setConnectionStatus(
-              "Database connection requires attention"
-            );
-            setConnectionMessage(
-              statusError.message ||
-                "Supabase database test failed."
-            );
-          } else {
-            setConnectionStatus("Supabase connected");
-            setConnectionMessage(
-              statusData?.length
-                ? "CargoDesk can communicate with the logistics database."
-                : "Authenticated Supabase connection is working, but no shipment-status row was returned."
-            );
-          }
-        }
+        await checkAuthenticatedDatabase(currentSession);
       }
 
-      setAuthLoading(false);
+      if (isMounted) {
+        setAuthLoading(false);
+      }
     };
 
     initializeAuthAndDatabase();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      if (isMounted) {
-        setSession(currentSession ?? null);
+    } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
+      if (!isMounted) {
+        return;
+      }
+
+      setSession(currentSession ?? null);
+      setAuthError("");
+
+      if (currentSession) {
+        setConnectionStatus("Checking database...");
+        setConnectionMessage("");
+        await checkAuthenticatedDatabase(currentSession);
+      } else {
+        setConnectionStatus("Supabase reachable");
+        setConnectionMessage(
+          "Database access requires authentication. CargoDesk security is active."
+        );
       }
     });
 
@@ -156,11 +180,357 @@ function App() {
     };
   }, []);
 
+  const handleLogin = async (event) => {
+    event.preventDefault();
+
+    setAuthError("");
+    setAuthSubmitting(true);
+
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
+      setAuthError("Please enter your email address and password.");
+      setAuthSubmitting(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    if (error) {
+      console.error("CargoDesk sign-in failed:", error);
+      setAuthError(
+        error.message || "Unable to sign in. Please check your credentials."
+      );
+    }
+
+    setAuthSubmitting(false);
+  };
+
+  const handleSignOut = async () => {
+    setAuthError("");
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error("CargoDesk sign-out failed:", error);
+      setAuthError(error.message || "Unable to sign out.");
+    }
+  };
+
   const isDashboard = activePage === "Dashboard";
 
   const handleNavigation = (item) => {
     setActivePage(item);
   };
+
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f5f7fb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+          color: "#173b6c",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "420px",
+            padding: "30px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "64px",
+              height: "64px",
+              borderRadius: "14px",
+              background: "#173b6c",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 20px",
+              fontWeight: "700",
+              fontSize: "20px",
+            }}
+          >
+            CD
+          </div>
+
+          <div
+            style={{
+              fontSize: "22px",
+              fontWeight: "700",
+              marginBottom: "8px",
+            }}
+          >
+            CargoDesk Global
+          </div>
+
+          <div
+            style={{
+              fontSize: "13px",
+              color: "#627d98",
+            }}
+          >
+            Checking secure authentication...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f5f7fb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+          color: "#172033",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "430px",
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e5e9f0",
+              borderRadius: "16px",
+              padding: "34px",
+              boxShadow: "0 8px 30px rgba(16,42,67,0.08)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "14px",
+                marginBottom: "30px",
+              }}
+            >
+              <div
+                style={{
+                  width: "52px",
+                  height: "52px",
+                  borderRadius: "12px",
+                  background: "#173b6c",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: "700",
+                  fontSize: "16px",
+                }}
+              >
+                CD
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    fontSize: "21px",
+                    fontWeight: "700",
+                    color: "#173b6c",
+                  }}
+                >
+                  CargoDesk Global
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "3px",
+                    fontSize: "12px",
+                    color: "#718096",
+                  }}
+                >
+                  Logistics Operations Platform
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "24px" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "700",
+                  color: "#627d98",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.7px",
+                  marginBottom: "7px",
+                }}
+              >
+                Secure Access
+              </div>
+
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: "27px",
+                  color: "#173b6c",
+                }}
+              >
+                Sign in
+              </h1>
+
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  fontSize: "13px",
+                  color: "#627d98",
+                  lineHeight: 1.6,
+                }}
+              >
+                Sign in to access the CargoDesk Global logistics operations
+                workspace.
+              </p>
+            </div>
+
+            {authError && (
+              <div
+                style={{
+                  background: "#fff5f5",
+                  border: "1px solid #fed7d7",
+                  borderRadius: "8px",
+                  padding: "12px 13px",
+                  marginBottom: "18px",
+                  color: "#b83232",
+                  fontSize: "12px",
+                  lineHeight: 1.5,
+                }}
+              >
+                {authError}
+              </div>
+            )}
+
+            <form onSubmit={handleLogin}>
+              <label
+                htmlFor="cargodesk-email"
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#334e68",
+                  marginBottom: "7px",
+                }}
+              >
+                Email address
+              </label>
+
+              <input
+                id="cargodesk-email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Enter your email address"
+                disabled={authSubmitting}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  border: "1px solid #cbd5e0",
+                  borderRadius: "8px",
+                  padding: "12px 13px",
+                  fontSize: "14px",
+                  outline: "none",
+                  marginBottom: "16px",
+                  color: "#172033",
+                  background: "#ffffff",
+                }}
+              />
+
+              <label
+                htmlFor="cargodesk-password"
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#334e68",
+                  marginBottom: "7px",
+                }}
+              >
+                Password
+              </label>
+
+              <input
+                id="cargodesk-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Enter your password"
+                disabled={authSubmitting}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  border: "1px solid #cbd5e0",
+                  borderRadius: "8px",
+                  padding: "12px 13px",
+                  fontSize: "14px",
+                  outline: "none",
+                  marginBottom: "20px",
+                  color: "#172033",
+                  background: "#ffffff",
+                }}
+              />
+
+              <button
+                type="submit"
+                disabled={authSubmitting}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "13px 16px",
+                  background: authSubmitting ? "#829ab1" : "#173b6c",
+                  color: "#ffffff",
+                  fontSize: "14px",
+                  fontWeight: "700",
+                  cursor: authSubmitting ? "not-allowed" : "pointer",
+                }}
+              >
+                {authSubmitting ? "Signing in..." : "Sign in to CargoDesk"}
+              </button>
+            </form>
+
+            <div
+              style={{
+                marginTop: "20px",
+                paddingTop: "16px",
+                borderTop: "1px solid #e5e9f0",
+                fontSize: "11px",
+                lineHeight: 1.6,
+                color: "#829ab1",
+                textAlign: "center",
+              }}
+            >
+              Authorized CargoDesk users only.
+              <br />
+              Protected by Supabase authentication and database security.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -220,26 +590,31 @@ function App() {
             style={{
               padding: "7px 11px",
               borderRadius: "20px",
-              background: authLoading
-                ? "#f0f4f8"
-                : session
-                  ? "#e6f4ea"
-                  : "#f0f4f8",
-              color: authLoading
-                ? "#627d98"
-                : session
-                  ? "#1f7a5a"
-                  : "#627d98",
+              background: "#e6f4ea",
+              color: "#1f7a5a",
               fontSize: "11px",
               fontWeight: "600",
             }}
           >
-            {authLoading
-              ? "Checking session..."
-              : session
-                ? "Authenticated"
-                : "Not signed in"}
+            Authenticated
           </div>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              border: "1px solid #d9e2ec",
+              borderRadius: "7px",
+              padding: "8px 11px",
+              background: "#ffffff",
+              color: "#334e68",
+              fontSize: "11px",
+              fontWeight: "600",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
 
           <div
             style={{
