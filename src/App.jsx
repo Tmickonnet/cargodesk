@@ -69,10 +69,14 @@ function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  const [connectionStatus, setConnectionStatus] =
+    useState("Checking database...");
+  const [connectionMessage, setConnectionMessage] = useState("");
+
   useEffect(() => {
     let isMounted = true;
 
-    const initializeAuth = async () => {
+    const initializeAuthAndDatabase = async () => {
       const { data, error } = await supabase.auth.getSession();
 
       if (!isMounted) {
@@ -87,9 +91,37 @@ function App() {
       }
 
       setAuthLoading(false);
+
+      const { data: statusData, error: statusError } = await supabase
+        .from("shipment_statuses")
+        .select("*")
+        .limit(1);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (statusError) {
+        console.error(
+          "CargoDesk Supabase database connection test failed:",
+          statusError
+        );
+
+        setConnectionStatus("Database connection requires attention");
+        setConnectionMessage(
+          statusError.message || "Supabase database test failed."
+        );
+      } else {
+        setConnectionStatus("Supabase connected");
+        setConnectionMessage(
+          statusData?.length
+            ? "CargoDesk can communicate with the logistics database."
+            : "Supabase is reachable. No shipment-status row was returned, which may be caused by RLS or an empty table."
+        );
+      }
     };
 
-    initializeAuth();
+    initializeAuthAndDatabase();
 
     const {
       data: { subscription },
@@ -339,6 +371,57 @@ function App() {
                   Monitor your logistics operations from one central workspace.
                 </p>
               </div>
+
+              {/* Supabase connection status */}
+              <section
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e5e9f0",
+                  borderRadius: "12px",
+                  padding: "18px 20px",
+                  marginBottom: "22px",
+                  boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    color: "#627d98",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.7px",
+                    marginBottom: "7px",
+                  }}
+                >
+                  System Connectivity
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "15px",
+                    fontWeight: "700",
+                    color:
+                      connectionStatus === "Supabase connected"
+                        ? "#1f7a5a"
+                        : "#173b6c",
+                  }}
+                >
+                  {connectionStatus}
+                </div>
+
+                {connectionMessage && (
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      fontSize: "12px",
+                      lineHeight: 1.6,
+                      color: "#627d98",
+                    }}
+                  >
+                    {connectionMessage}
+                  </div>
+                )}
+              </section>
 
               {/* Dashboard cards */}
               <div
