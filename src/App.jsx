@@ -20,6 +20,28 @@ const navigationGroups = [
   },
 ];
 
+const navigationPermissions = {
+  Shipments: "SHIPMENT_VIEW",
+  Documentation: "DOCUMENT_VIEW",
+  Containers: "CARGO_VIEW",
+  Warehouse: "OPERATIONS_VIEW",
+  Shipping: "BOOKING_VIEW",
+  Delivery: "DELIVERY_VIEW",
+  "Audit Log": "AUDIT_VIEW",
+  Settings: "SYSTEM_CONFIG",
+};
+
+const authorizationPermissionCodes = [
+  "SHIPMENT_VIEW",
+  "DOCUMENT_VIEW",
+  "CARGO_VIEW",
+  "OPERATIONS_VIEW",
+  "BOOKING_VIEW",
+  "DELIVERY_VIEW",
+  "AUDIT_VIEW",
+  "SYSTEM_CONFIG",
+];
+
 const moduleDescriptions = {
   Shipments:
     "Create, monitor, track, and manage shipment activities from booking through final delivery.",
@@ -78,6 +100,11 @@ function App() {
     useState("Checking database...");
   const [connectionMessage, setConnectionMessage] = useState("");
 
+  const [userRole, setUserRole] = useState("");
+  const [userPermissions, setUserPermissions] = useState({});
+  const [rbacLoading, setRbacLoading] = useState(false);
+  const [rbacError, setRbacError] = useState("");
+
   useEffect(() => {
     let isMounted = true;
 
@@ -124,6 +151,77 @@ function App() {
       }
     };
 
+    const loadUserAuthorization = async (currentSession) => {
+      if (!currentSession) {
+        if (!isMounted) {
+          return;
+        }
+
+        setUserRole("");
+        setUserPermissions({});
+        setRbacError("");
+        setRbacLoading(false);
+        return;
+      }
+
+      if (isMounted) {
+        setRbacLoading(true);
+        setRbacError("");
+      }
+
+      try {
+        const { data: roleData, error: roleError } = await supabase.rpc(
+          "current_user_role"
+        );
+
+        if (roleError) {
+          throw roleError;
+        }
+
+        const permissionResults = await Promise.all(
+          authorizationPermissionCodes.map(async (permissionCode) => {
+            const { data, error } = await supabase.rpc("has_permission", {
+              requested_permission: permissionCode,
+            });
+
+            if (error) {
+              throw error;
+            }
+
+            return [permissionCode, data === true];
+          })
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUserRole(roleData || "");
+        setUserPermissions(Object.fromEntries(permissionResults));
+        setRbacError("");
+      } catch (error) {
+        console.error(
+          "CargoDesk authorization loading failed:",
+          error
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUserRole("");
+        setUserPermissions({});
+        setRbacError(
+          error?.message ||
+            "Unable to load CargoDesk authorization information."
+        );
+      } finally {
+        if (isMounted) {
+          setRbacLoading(false);
+        }
+      }
+    };
+
     const initializeAuthAndDatabase = async () => {
       const { data, error } = await supabase.auth.getSession();
 
@@ -135,14 +233,24 @@ function App() {
 
       if (error) {
         console.error("CargoDesk authentication check failed:", error);
+
         setSession(null);
         setConnectionStatus("Supabase reachable");
         setConnectionMessage(
           "Authentication check requires attention. Database access remains protected."
         );
+
+        setUserRole("");
+        setUserPermissions({});
+        setRbacError("");
       } else {
         setSession(currentSession);
+
         await checkAuthenticatedDatabase(currentSession);
+
+        if (currentSession) {
+          await loadUserAuthorization(currentSession);
+        }
       }
 
       if (isMounted) {
@@ -154,7 +262,7 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
+    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       if (!isMounted) {
         return;
       }
@@ -162,16 +270,35 @@ function App() {
       setSession(currentSession ?? null);
       setAuthError("");
 
-      if (currentSession) {
-        setConnectionStatus("Checking database...");
-        setConnectionMessage("");
-        await checkAuthenticatedDatabase(currentSession);
-      } else {
-        setConnectionStatus("Supabase reachable");
-        setConnectionMessage(
-          "Database access requires authentication. CargoDesk security is active."
-        );
-      }
+      /*
+       * Supabase authentication callbacks should remain lightweight.
+       * Database/RPC work is scheduled outside the callback to avoid
+       * blocking the authentication state-change process.
+       */
+      setTimeout(async () => {
+        if (!isMounted) {
+          return;
+        }
+
+        if (currentSession) {
+          setConnectionStatus("Checking database...");
+          setConnectionMessage("");
+
+          await checkAuthenticatedDatabase(currentSession);
+          await loadUserAuthorization(currentSession);
+        } else {
+          setUserRole("");
+          setUserPermissions({});
+          setRbacError("");
+
+          setConnectionStatus("Supabase reachable");
+          setConnectionMessage(
+            "Database access requires authentication. CargoDesk security is active."
+          );
+
+          setActivePage("Dashboard");
+        }
+      }, 0);
     });
 
     return () => {
@@ -220,10 +347,66 @@ function App() {
     }
   };
 
+  const handleNavigation = (item) => {
+    if (item === "Dashboard") {
+      setAuthError("");
+      setActivePage("Dashboard");
+      return;
+    }
+
+    /*
+     * Reports is intentionally not authorized yet because the current
+     * RBAC permission catalogue does not contain REPORT_VIEW.
+     */
+    if (item === "Reports") {
+      setAuthError(
+        "Reports is not yet available because reporting authorization has not been defined."
+      );
+      return;
+    }
+
+    const requiredPermission = navigationPermissions[item];
+
+    if (!requiredPermission) {
+      setAuthError(
+        `The ${item} module does not currently have an authorization rule.`
+      );
+      return;
+    }
+
+    if (userPermissions[requiredPermission] !== true) {
+      setAuthError(
+        `You do not have permission to access the ${item} module.`
+      );
+      return;
+    }
+
+    setAuthError("");
+    setActivePage(item);
+  };
+
   const isDashboard = activePage === "Dashboard";
 
-  const handleNavigation = (item) => {
-    setActivePage(item);
+  const isNavigationItemVisible = (item) => {
+    if (item === "Dashboard") {
+      return true;
+    }
+
+    /*
+     * Reports remains hidden until a dedicated reporting permission
+     * is formally introduced into the existing RBAC design.
+     */
+    if (item === "Reports") {
+      return false;
+    }
+
+    const requiredPermission = navigationPermissions[item];
+
+    if (!requiredPermission) {
+      return false;
+    }
+
+    return userPermissions[requiredPermission] === true;
   };
 
   if (authLoading) {
@@ -590,13 +773,15 @@ function App() {
             style={{
               padding: "7px 11px",
               borderRadius: "20px",
-              background: "#e6f4ea",
-              color: "#1f7a5a",
+              background: rbacError ? "#fff5f5" : "#e6f4ea",
+              color: rbacError ? "#b83232" : "#1f7a5a",
               fontSize: "11px",
               fontWeight: "600",
             }}
           >
-            Authenticated
+            {rbacLoading
+              ? "Checking authorization..."
+              : userRole || "Authenticated"}
           </div>
 
           <button
@@ -670,50 +855,62 @@ function App() {
             </div>
           </div>
 
-          {navigationGroups.map((group) => (
-            <div key={group.title} style={{ marginBottom: "25px" }}>
-              <div
-                style={{
-                  padding: "0 12px 9px",
-                  fontSize: "11px",
-                  fontWeight: "700",
-                  letterSpacing: "0.8px",
-                  color: "#829ab1",
-                  textTransform: "uppercase",
-                }}
-              >
-                {group.title}
+          {navigationGroups.map((group) => {
+            const visibleItems = group.items.filter(
+              isNavigationItemVisible
+            );
+
+            if (!visibleItems.length) {
+              return null;
+            }
+
+            return (
+              <div key={group.title} style={{ marginBottom: "25px" }}>
+                <div
+                  style={{
+                    padding: "0 12px 9px",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    letterSpacing: "0.8px",
+                    color: "#829ab1",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {group.title}
+                </div>
+
+                {visibleItems.map((item) => {
+                  const isActive = activePage === item;
+
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => handleNavigation(item)}
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "11px 12px",
+                        marginBottom: "4px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        background: isActive
+                          ? "#1f5f95"
+                          : "transparent",
+                        color: isActive ? "#ffffff" : "#d9e2ec",
+                        fontSize: "14px",
+                        fontWeight: isActive ? "600" : "500",
+                        transition: "background 0.15s ease",
+                      }}
+                    >
+                      {item}
+                    </button>
+                  );
+                })}
               </div>
-
-              {group.items.map((item) => {
-                const isActive = activePage === item;
-
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => handleNavigation(item)}
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "11px 12px",
-                      marginBottom: "4px",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      background: isActive ? "#1f5f95" : "transparent",
-                      color: isActive ? "#ffffff" : "#d9e2ec",
-                      fontSize: "14px",
-                      fontWeight: isActive ? "600" : "500",
-                      transition: "background 0.15s ease",
-                    }}
-                  >
-                    {item}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+            );
+          })}
         </aside>
 
         {/* Main Content */}
@@ -724,6 +921,42 @@ function App() {
             minWidth: 0,
           }}
         >
+          {authError && (
+            <div
+              style={{
+                background: "#fff5f5",
+                border: "1px solid #fed7d7",
+                borderRadius: "8px",
+                padding: "12px 14px",
+                marginBottom: "18px",
+                color: "#b83232",
+                fontSize: "12px",
+                lineHeight: 1.5,
+              }}
+            >
+              {authError}
+            </div>
+          )}
+
+          {rbacError && (
+            <div
+              style={{
+                background: "#fffaf0",
+                border: "1px solid #f6d365",
+                borderRadius: "8px",
+                padding: "12px 14px",
+                marginBottom: "18px",
+                color: "#8a5a00",
+                fontSize: "12px",
+                lineHeight: 1.5,
+              }}
+            >
+              Authorization information could not be loaded. Protected
+              navigation has been restricted until authorization can be
+              verified.
+            </div>
+          )}
+
           {isDashboard ? (
             <>
               {/* Dashboard heading */}
