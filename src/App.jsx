@@ -83,42 +83,61 @@ function App() {
         return;
       }
 
+      const currentSession = data?.session ?? null;
+
       if (error) {
         console.error("CargoDesk authentication check failed:", error);
         setSession(null);
+        setConnectionStatus("Supabase reachable");
+        setConnectionMessage(
+          "Authentication check requires attention. Database access remains protected."
+        );
       } else {
-        setSession(data.session ?? null);
+        setSession(currentSession);
+
+        if (!currentSession) {
+          setConnectionStatus("Supabase reachable");
+          setConnectionMessage(
+            "Database access requires authentication. CargoDesk security is active."
+          );
+        } else {
+          const {
+            data: statusData,
+            error: statusError,
+          } = await supabase
+            .from("shipment_statuses")
+            .select("*")
+            .limit(1);
+
+          if (!isMounted) {
+            return;
+          }
+
+          if (statusError) {
+            console.error(
+              "CargoDesk Supabase database connection test failed:",
+              statusError
+            );
+
+            setConnectionStatus(
+              "Database connection requires attention"
+            );
+            setConnectionMessage(
+              statusError.message ||
+                "Supabase database test failed."
+            );
+          } else {
+            setConnectionStatus("Supabase connected");
+            setConnectionMessage(
+              statusData?.length
+                ? "CargoDesk can communicate with the logistics database."
+                : "Authenticated Supabase connection is working, but no shipment-status row was returned."
+            );
+          }
+        }
       }
 
       setAuthLoading(false);
-
-      const { data: statusData, error: statusError } = await supabase
-        .from("shipment_statuses")
-        .select("*")
-        .limit(1);
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (statusError) {
-        console.error(
-          "CargoDesk Supabase database connection test failed:",
-          statusError
-        );
-
-        setConnectionStatus("Database connection requires attention");
-        setConnectionMessage(
-          statusError.message || "Supabase database test failed."
-        );
-      } else {
-        setConnectionStatus("Supabase connected");
-        setConnectionMessage(
-          statusData?.length
-            ? "CargoDesk can communicate with the logistics database."
-            : "Supabase is reachable. No shipment-status row was returned, which may be caused by RLS or an empty table."
-        );
-      }
     };
 
     initializeAuthAndDatabase();
