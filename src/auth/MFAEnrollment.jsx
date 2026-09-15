@@ -104,19 +104,18 @@ export default function MFAEnrollment({ onComplete }) {
         application.
       </p>
 
-      {enrollment.totp?.qr_code && (
-        <img
-          src={enrollment.totp.qr_code}
-          alt="CargoDesk MFA setup QR code"
-        />
-      )}
-
       {enrollment.totp?.secret && (
-        <p>
-          If you cannot scan the QR code, use the
-          displayed setup key in your authenticator app.
-        </p>
-      )}
+  <div>
+    <p>
+      If you cannot scan the QR code, enter this setup
+      key manually in your authenticator app:
+    </p>
+
+    <p>
+      <strong>{enrollment.totp.secret}</strong>
+    </p>
+  </div>
+)}
 
       <form onSubmit={handleVerify}>
         <label htmlFor="mfa-code">
