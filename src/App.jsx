@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
+import {
+  getMFAState,
+  getVerifiedTOTPFactor,
+  isMFARequiredForRole,
+} from "./auth/mfa";
+import MFAEnrollment from "./auth/MFAEnrollment";
+import MFAChallenge from "./auth/MFAChallenge";
 
 const navigationGroups = [
   {
@@ -69,6 +76,12 @@ function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  const [mfaState, setMfaState] = useState(null);
+  const [mfaFactor, setMfaFactor] = useState(null);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaError, setMfaError] = useState("");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
@@ -78,51 +91,108 @@ function App() {
     useState("Checking database...");
   const [connectionMessage, setConnectionMessage] = useState("");
 
+  const checkAuthenticatedDatabase = async (currentSession) => {
+    if (!currentSession) {
+      setConnectionStatus("Supabase reachable");
+      setConnectionMessage(
+        "Database access requires authentication. CargoDesk security is active."
+      );
+      return;
+    }
+
+    const {
+      data: statusData,
+      error: statusError,
+    } = await supabase
+      .from("shipment_statuses")
+      .select("*")
+      .limit(1);
+
+    if (statusError) {
+      console.error(
+        "CargoDesk Supabase database connection test failed:",
+        statusError
+      );
+
+      setConnectionStatus("Database connection requires attention");
+      setConnectionMessage(
+        statusError.message || "Supabase database test failed."
+      );
+    } else {
+      setConnectionStatus("Supabase connected");
+      setConnectionMessage(
+        statusData?.length
+          ? "CargoDesk can communicate with the logistics database."
+          : "Authenticated Supabase connection is working, but no shipment-status row was returned."
+      );
+    }
+  };
+
+  const checkMFARequirement = async (currentSession) => {
+    if (!currentSession?.user?.id) {
+      setMfaState(null);
+      setMfaFactor(null);
+      setMfaRequired(false);
+      setMfaError("");
+      return;
+    }
+
+    setMfaLoading(true);
+    setMfaError("");
+
+    try {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("role_id, roles(role_code)")
+        .eq("auth_user_id", currentSession.user.id)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (userError) {
+        throw userError;
+      }
+
+      const roleCode = userData?.roles?.role_code ?? null;
+      const required = isMFARequiredForRole(roleCode);
+
+      setMfaRequired(required);
+
+      if (!required) {
+        setMfaState({
+          currentLevel: null,
+          nextLevel: null,
+          aal2Required: false,
+          aal2Verified: false,
+        });
+        setMfaFactor(null);
+        return;
+      }
+
+      const state = await getMFAState();
+      const factor = await getVerifiedTOTPFactor();
+
+      setMfaState(state);
+      setMfaFactor(factor);
+    } catch (error) {
+      console.error("CargoDesk MFA status check failed:", error);
+
+      setMfaError(
+        error?.message ||
+          "Unable to verify the multi-factor authentication status."
+      );
+
+      setMfaState(null);
+      setMfaFactor(null);
+
+      // Fail closed for required MFA.
+      setMfaRequired(true);
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-
-    const checkAuthenticatedDatabase = async (currentSession) => {
-      if (!currentSession) {
-        if (isMounted) {
-          setConnectionStatus("Supabase reachable");
-          setConnectionMessage(
-            "Database access requires authentication. CargoDesk security is active."
-          );
-        }
-        return;
-      }
-
-      const {
-        data: statusData,
-        error: statusError,
-      } = await supabase
-        .from("shipment_statuses")
-        .select("*")
-        .limit(1);
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (statusError) {
-        console.error(
-          "CargoDesk Supabase database connection test failed:",
-          statusError
-        );
-
-        setConnectionStatus("Database connection requires attention");
-        setConnectionMessage(
-          statusError.message || "Supabase database test failed."
-        );
-      } else {
-        setConnectionStatus("Supabase connected");
-        setConnectionMessage(
-          statusData?.length
-            ? "CargoDesk can communicate with the logistics database."
-            : "Authenticated Supabase connection is working, but no shipment-status row was returned."
-        );
-      }
-    };
 
     const initializeAuthAndDatabase = async () => {
       const { data, error } = await supabase.auth.getSession();
@@ -136,13 +206,21 @@ function App() {
       if (error) {
         console.error("CargoDesk authentication check failed:", error);
         setSession(null);
+        setMfaState(null);
+        setMfaFactor(null);
+        setMfaRequired(false);
         setConnectionStatus("Supabase reachable");
         setConnectionMessage(
           "Authentication check requires attention. Database access remains protected."
         );
       } else {
         setSession(currentSession);
+
         await checkAuthenticatedDatabase(currentSession);
+
+        if (currentSession) {
+          await checkMFARequirement(currentSession);
+        }
       }
 
       if (isMounted) {
@@ -154,25 +232,43 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
-      if (!isMounted) {
-        return;
-      }
+    } = supabase.auth.onAuthStateChange(
+      (_event, currentSession) => {
+        if (!isMounted) {
+          return;
+        }
 
-      setSession(currentSession ?? null);
-      setAuthError("");
+        setSession(currentSession ?? null);
+        setAuthError("");
 
-      if (currentSession) {
+        if (!currentSession) {
+          setMfaState(null);
+          setMfaFactor(null);
+          setMfaRequired(false);
+          setMfaError("");
+
+          setConnectionStatus("Supabase reachable");
+          setConnectionMessage(
+            "Database access requires authentication. CargoDesk security is active."
+          );
+
+          return;
+        }
+
         setConnectionStatus("Checking database...");
         setConnectionMessage("");
-        await checkAuthenticatedDatabase(currentSession);
-      } else {
-        setConnectionStatus("Supabase reachable");
-        setConnectionMessage(
-          "Database access requires authentication. CargoDesk security is active."
-        );
+
+        // Defer database/MFA work until the auth callback completes.
+        setTimeout(async () => {
+          if (!isMounted) {
+            return;
+          }
+
+          await checkAuthenticatedDatabase(currentSession);
+          await checkMFARequirement(currentSession);
+        }, 0);
       }
-    });
+    );
 
     return () => {
       isMounted = false;
@@ -217,6 +313,35 @@ function App() {
     if (error) {
       console.error("CargoDesk sign-out failed:", error);
       setAuthError(error.message || "Unable to sign out.");
+    }
+  };
+
+  const handleMFAComplete = async () => {
+    if (!session) {
+      return;
+    }
+
+    setMfaError("");
+    setMfaLoading(true);
+
+    try {
+      const state = await getMFAState();
+      const factor = await getVerifiedTOTPFactor();
+
+      setMfaState(state);
+      setMfaFactor(factor);
+    } catch (error) {
+      console.error(
+        "CargoDesk MFA completion check failed:",
+        error
+      );
+
+      setMfaError(
+        error?.message ||
+          "Unable to confirm MFA completion. Please try again."
+      );
+    } finally {
+      setMfaLoading(false);
     }
   };
 
@@ -532,6 +657,247 @@ function App() {
     );
   }
 
+  if (mfaLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f5f7fb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+          color: "#173b6c",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "430px",
+            background: "#ffffff",
+            border: "1px solid #e5e9f0",
+            borderRadius: "16px",
+            padding: "34px",
+            textAlign: "center",
+            boxShadow: "0 8px 30px rgba(16,42,67,0.08)",
+          }}
+        >
+          <h2
+            style={{
+              margin: "0 0 10px",
+              color: "#173b6c",
+            }}
+          >
+            Checking account security
+          </h2>
+
+          <p
+            style={{
+              margin: 0,
+              color: "#627d98",
+              fontSize: "13px",
+              lineHeight: 1.6,
+            }}
+          >
+            CargoDesk is verifying your multi-factor authentication status.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (mfaRequired && mfaError) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f5f7fb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "430px",
+            background: "#ffffff",
+            border: "1px solid #fed7d7",
+            borderRadius: "16px",
+            padding: "34px",
+            boxShadow: "0 8px 30px rgba(16,42,67,0.08)",
+          }}
+        >
+          <h2
+            style={{
+              margin: "0 0 12px",
+              color: "#b83232",
+            }}
+          >
+            Additional security verification required
+          </h2>
+
+          <p
+            style={{
+              margin: "0 0 20px",
+              color: "#627d98",
+              fontSize: "13px",
+              lineHeight: 1.6,
+            }}
+          >
+            CargoDesk could not verify the multi-factor authentication status
+            of this administrator account.
+          </p>
+
+          <div
+            style={{
+              background: "#fff5f5",
+              border: "1px solid #fed7d7",
+              borderRadius: "8px",
+              padding: "12px",
+              color: "#b83232",
+              fontSize: "12px",
+              lineHeight: 1.5,
+            }}
+          >
+            {mfaError}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              width: "100%",
+              marginTop: "18px",
+              border: "none",
+              borderRadius: "8px",
+              padding: "13px 16px",
+              background: "#173b6c",
+              color: "#ffffff",
+              fontSize: "14px",
+              fontWeight: "700",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mfaRequired && !mfaFactor) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f5f7fb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "500px",
+            background: "#ffffff",
+            border: "1px solid #e5e9f0",
+            borderRadius: "16px",
+            padding: "34px",
+            boxShadow: "0 8px 30px rgba(16,42,67,0.08)",
+          }}
+        >
+          <MFAEnrollment onComplete={handleMFAComplete} />
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              width: "100%",
+              marginTop: "20px",
+              border: "1px solid #d9e2ec",
+              borderRadius: "8px",
+              padding: "12px 16px",
+              background: "#ffffff",
+              color: "#334e68",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    mfaRequired &&
+    mfaFactor &&
+    !mfaState?.aal2Verified
+  ) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f5f7fb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "500px",
+            background: "#ffffff",
+            border: "1px solid #e5e9f0",
+            borderRadius: "16px",
+            padding: "34px",
+            boxShadow: "0 8px 30px rgba(16,42,67,0.08)",
+          }}
+        >
+          <MFAChallenge
+            factor={mfaFactor}
+            onComplete={handleMFAComplete}
+          />
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              width: "100%",
+              marginTop: "20px",
+              border: "1px solid #d9e2ec",
+              borderRadius: "8px",
+              padding: "12px 16px",
+              background: "#ffffff",
+              color: "#334e68",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -726,7 +1092,6 @@ function App() {
         >
           {isDashboard ? (
             <>
-              {/* Dashboard heading */}
               <div
                 style={{
                   marginBottom: "25px",
@@ -766,7 +1131,6 @@ function App() {
                 </p>
               </div>
 
-              {/* Supabase connection status */}
               <section
                 style={{
                   background: "#ffffff",
@@ -817,7 +1181,6 @@ function App() {
                 )}
               </section>
 
-              {/* Dashboard cards */}
               <div
                 style={{
                   display: "grid",
@@ -873,7 +1236,6 @@ function App() {
                 ))}
               </div>
 
-              {/* Operations overview */}
               <section
                 style={{
                   background: "#ffffff",
@@ -924,7 +1286,6 @@ function App() {
             </>
           ) : (
             <>
-              {/* Module workspace */}
               <div
                 style={{
                   marginBottom: "22px",
