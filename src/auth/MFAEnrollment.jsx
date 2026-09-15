@@ -48,7 +48,11 @@ export default function MFAEnrollment({ onComplete }) {
         enrollment.id
       );
 
-      await verifyTOTP(challenge.id, cleanCode);
+      await verifyTOTP(
+  enrollment.id,
+  challenge.id,
+  cleanCode
+);
 
       if (onComplete) {
         onComplete();
