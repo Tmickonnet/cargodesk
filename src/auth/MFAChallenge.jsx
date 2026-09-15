@@ -39,6 +39,7 @@ export default function MFAChallenge({
       );
 
       await verifyTOTP(
+        factor.id,
         challenge.id,
         cleanCode
       );
