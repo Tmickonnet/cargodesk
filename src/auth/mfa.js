@@ -76,8 +76,16 @@ export async function challengeTOTP(factorId) {
   return data;
 }
 
-export async function verifyTOTP(challengeId, code) {
+export async function verifyTOTP(
+  factorId,
+  challengeId,
+  code
+) {
   const cleanCode = String(code ?? "").replace(/\s+/g, "");
+
+  if (!factorId) {
+    throw new Error("An MFA factor is required.");
+  }
 
   if (!challengeId) {
     throw new Error("An MFA challenge is required.");
@@ -91,6 +99,7 @@ export async function verifyTOTP(challengeId, code) {
 
   const { data, error } =
     await supabase.auth.mfa.verify({
+      factorId,
       challengeId,
       code: cleanCode,
     });
