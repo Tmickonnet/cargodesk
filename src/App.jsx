@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
+import { useAuthorization } from "./auth/useAuthorization";
 
 const navigationGroups = [
   {
@@ -19,6 +20,19 @@ const navigationGroups = [
     items: ["Reports", "Audit Log", "Settings"],
   },
 ];
+
+const navigationPermissions = {
+  Dashboard: "OPERATIONS_VIEW",
+  Shipments: "SHIPMENT_VIEW",
+  Documentation: "DOCUMENT_VIEW",
+  Containers: "CARGO_VIEW",
+  Warehouse: "OPERATIONS_VIEW",
+  Shipping: "BOOKING_VIEW",
+  Delivery: "DELIVERY_VIEW",
+  Reports: "OPERATIONS_VIEW",
+  "Audit Log": "AUDIT_VIEW",
+  Settings: "SYSTEM_CONFIG",
+};
 
 const moduleDescriptions = {
   Shipments:
@@ -77,6 +91,14 @@ function App() {
   const [connectionStatus, setConnectionStatus] =
     useState("Checking database...");
   const [connectionMessage, setConnectionMessage] = useState("");
+
+  const {
+    role,
+    loading: authorizationLoading,
+    hasPermission,
+  } = useAuthorization(Boolean(session));
+
+  const [allowedNavigation, setAllowedNavigation] = useState({});
 
   useEffect(() => {
     let isMounted = true;
@@ -161,6 +183,7 @@ function App() {
 
       setSession(currentSession ?? null);
       setAuthError("");
+      setAllowedNavigation({});
 
       if (currentSession) {
         setConnectionStatus("Checking database...");
@@ -179,6 +202,47 @@ function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolveNavigationPermissions = async () => {
+      if (!session || authorizationLoading || !role) {
+        if (isMounted) {
+          setAllowedNavigation({});
+        }
+        return;
+      }
+
+      const checks = await Promise.all(
+        Object.entries(navigationPermissions).map(
+          async ([item, permission]) => [item, await hasPermission(permission)]
+        )
+      );
+
+      if (!isMounted) {
+        return;
+      }
+
+      setAllowedNavigation(Object.fromEntries(checks));
+    };
+
+    resolveNavigationPermissions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
+    if (!session || authorizationLoading || !role) {
+      return;
+    }
+
+    if (allowedNavigation[activePage] === false) {
+      setActivePage("Dashboard");
+    }
+  }, [session, authorizationLoading, role, allowedNavigation, activePage]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -223,8 +287,21 @@ function App() {
   const isDashboard = activePage === "Dashboard";
 
   const handleNavigation = (item) => {
+    if (authorizationLoading || !role || allowedNavigation[item] !== true) {
+      return;
+    }
+
     setActivePage(item);
   };
+
+  const visibleNavigationGroups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => allowedNavigation[item] === true
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
 
   if (authLoading) {
     return (
@@ -532,6 +609,155 @@ function App() {
     );
   }
 
+  if (authorizationLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f5f7fb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+          color: "#173b6c",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "420px",
+            padding: "30px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "64px",
+              height: "64px",
+              borderRadius: "14px",
+              background: "#173b6c",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 20px",
+              fontWeight: "700",
+              fontSize: "20px",
+            }}
+          >
+            CD
+          </div>
+
+          <div
+            style={{
+              fontSize: "22px",
+              fontWeight: "700",
+              marginBottom: "8px",
+            }}
+          >
+            CargoDesk Global
+          </div>
+
+          <div
+            style={{
+              fontSize: "13px",
+              color: "#627d98",
+            }}
+          >
+            Verifying authorized access...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!role) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f5f7fb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+          color: "#172033",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "520px",
+            background: "#ffffff",
+            border: "1px solid #fed7d7",
+            borderRadius: "12px",
+            padding: "28px",
+            boxShadow: "0 8px 30px rgba(16,42,67,0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "12px",
+              fontWeight: "700",
+              color: "#b83232",
+              textTransform: "uppercase",
+              letterSpacing: "0.7px",
+              marginBottom: "10px",
+            }}
+          >
+            Authorization unavailable
+          </div>
+
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "24px",
+              color: "#173b6c",
+            }}
+          >
+            Access cannot be verified
+          </h1>
+
+          <p
+            style={{
+              margin: "10px 0 20px",
+              color: "#627d98",
+              fontSize: "14px",
+              lineHeight: 1.7,
+            }}
+          >
+            CargoDesk cannot establish the authenticated authorization role.
+            The application is failing closed and will not expose operational
+            modules until authorization can be verified.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              border: "1px solid #d9e2ec",
+              borderRadius: "7px",
+              padding: "9px 13px",
+              background: "#ffffff",
+              color: "#334e68",
+              fontSize: "12px",
+              fontWeight: "600",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isNavigationReady = Object.keys(allowedNavigation).length > 0;
+  const hasAccessibleModule = Object.values(allowedNavigation).some(Boolean);
+
   return (
     <div
       style={{
@@ -596,7 +822,20 @@ function App() {
               fontWeight: "600",
             }}
           >
-            Authenticated
+            Authorized
+          </div>
+
+          <div
+            style={{
+              padding: "7px 11px",
+              borderRadius: "20px",
+              background: "#eef2f7",
+              color: "#334e68",
+              fontSize: "11px",
+              fontWeight: "600",
+            }}
+          >
+            {role}
           </div>
 
           <button
@@ -670,50 +909,63 @@ function App() {
             </div>
           </div>
 
-          {navigationGroups.map((group) => (
-            <div key={group.title} style={{ marginBottom: "25px" }}>
-              <div
-                style={{
-                  padding: "0 12px 9px",
-                  fontSize: "11px",
-                  fontWeight: "700",
-                  letterSpacing: "0.8px",
-                  color: "#829ab1",
-                  textTransform: "uppercase",
-                }}
-              >
-                {group.title}
-              </div>
-
-              {group.items.map((item) => {
-                const isActive = activePage === item;
-
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => handleNavigation(item)}
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "11px 12px",
-                      marginBottom: "4px",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      background: isActive ? "#1f5f95" : "transparent",
-                      color: isActive ? "#ffffff" : "#d9e2ec",
-                      fontSize: "14px",
-                      fontWeight: isActive ? "600" : "500",
-                      transition: "background 0.15s ease",
-                    }}
-                  >
-                    {item}
-                  </button>
-                );
-              })}
+          {!isNavigationReady ? (
+            <div
+              style={{
+                padding: "12px",
+                color: "#9fb3c8",
+                fontSize: "12px",
+                lineHeight: 1.6,
+              }}
+            >
+              Loading authorized modules...
             </div>
-          ))}
+          ) : (
+            visibleNavigationGroups.map((group) => (
+              <div key={group.title} style={{ marginBottom: "25px" }}>
+                <div
+                  style={{
+                    padding: "0 12px 9px",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    letterSpacing: "0.8px",
+                    color: "#829ab1",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {group.title}
+                </div>
+
+                {group.items.map((item) => {
+                  const isActive = activePage === item;
+
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => handleNavigation(item)}
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "11px 12px",
+                        marginBottom: "4px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        background: isActive ? "#1f5f95" : "transparent",
+                        color: isActive ? "#ffffff" : "#d9e2ec",
+                        fontSize: "14px",
+                        fontWeight: isActive ? "600" : "500",
+                        transition: "background 0.15s ease",
+                      }}
+                    >
+                      {item}
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </aside>
 
         {/* Main Content */}
@@ -724,7 +976,53 @@ function App() {
             minWidth: 0,
           }}
         >
-          {isDashboard ? (
+          {!hasAccessibleModule ? (
+            <section
+              style={{
+                background: "#ffffff",
+                border: "1px solid #fed7d7",
+                borderRadius: "12px",
+                padding: "28px",
+                boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  color: "#b83232",
+                  marginBottom: "10px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.7px",
+                }}
+              >
+                No authorized modules
+              </div>
+
+              <h1
+                style={{
+                  margin: "0 0 10px",
+                  fontSize: "24px",
+                  color: "#173b6c",
+                }}
+              >
+                Access is restricted
+              </h1>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "#627d98",
+                  fontSize: "14px",
+                  lineHeight: 1.7,
+                }}
+              >
+                Your authenticated account does not currently have an active
+                CargoDesk permission that grants access to an application
+                module. No restricted module has been exposed.
+              </p>
+            </section>
+          ) : isDashboard ? (
             <>
               {/* Dashboard heading */}
               <div
@@ -932,12 +1230,15 @@ function App() {
               >
                 <button
                   type="button"
-                  onClick={() => setActivePage("Dashboard")}
+                  onClick={() => handleNavigation("Dashboard")}
                   style={{
                     border: "none",
                     background: "transparent",
                     padding: 0,
-                    cursor: "pointer",
+                    cursor:
+                      allowedNavigation.Dashboard === true
+                        ? "pointer"
+                        : "not-allowed",
                     color: "#1f5f95",
                     fontSize: "13px",
                     fontWeight: "600",
@@ -988,7 +1289,7 @@ function App() {
                     }}
                   >
                     {moduleDescriptions[activePage] ||
-                      "This CargoDesk Global module is ready for controlled implementation."}
+                      "This CargoDesk Global module is ready for controlled implementation steps."}
                   </p>
 
                   <div
