@@ -10,18 +10,28 @@ import {
  * React-facing authorization state.
  *
  * Authorization remains delegated to the existing Supabase security
- * functions through the adapter. While loading, or if a lookup fails, the
- * hook fails closed and exposes no permissions.
+ * functions through the adapter. While disabled, loading, or if a lookup
+ * fails, the hook fails closed and exposes no permissions.
  */
-export function useAuthorization() {
+export function useAuthorization(enabled = true) {
   const [role, setRole] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(enabled));
 
   useEffect(() => {
     let isMounted = true;
 
+    if (!enabled) {
+      setRole(null);
+      setLoading(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
     const loadAuthorization = async () => {
       setLoading(true);
+      setRole(null);
+
       const currentRole = await getCurrentRole();
 
       if (!isMounted) {
@@ -37,7 +47,7 @@ export function useAuthorization() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [enabled]);
 
   const permissionCheck = async (permission) => {
     if (loading || !role) {
