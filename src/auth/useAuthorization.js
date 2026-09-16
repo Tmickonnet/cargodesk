@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getCurrentRole,
   hasPermission,
@@ -49,29 +49,38 @@ export function useAuthorization(enabled = true) {
     };
   }, [enabled]);
 
-  const permissionCheck = async (permission) => {
-    if (loading || !role) {
-      return false;
-    }
+  const permissionCheck = useCallback(
+    async (permission) => {
+      if (loading || !role) {
+        return false;
+      }
 
-    return hasPermission(permission);
-  };
+      return hasPermission(permission);
+    },
+    [loading, role]
+  );
 
-  const anyPermissionCheck = async (permissions) => {
-    if (loading || !role) {
-      return false;
-    }
+  const anyPermissionCheck = useCallback(
+    async (permissions) => {
+      if (loading || !role) {
+        return false;
+      }
 
-    return hasAnyPermission(permissions);
-  };
+      return hasAnyPermission(permissions);
+    },
+    [loading, role]
+  );
 
-  const allPermissionCheck = async (permissions) => {
-    if (loading || !role) {
-      return false;
-    }
+  const allPermissionCheck = useCallback(
+    async (permissions) => {
+      if (loading || !role) {
+        return false;
+      }
 
-    return hasAllPermissions(permissions);
-  };
+      return hasAllPermissions(permissions);
+    },
+    [loading, role]
+  );
 
   return {
     role,
