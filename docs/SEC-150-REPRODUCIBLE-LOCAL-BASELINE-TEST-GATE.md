@@ -103,6 +103,7 @@ Negative tests must prove:
 - DECIDED evaluation cannot be modified;
 - SUPERSEDED evaluation cannot be modified;
 - finalized child evidence cannot be modified/deleted;
+- a child record cannot be re-parented into a DECIDED or SUPERSEDED evaluation;
 - human decision cannot be modified/deleted;
 - correction occurs through a new evaluation version.
 
