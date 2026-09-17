@@ -89,7 +89,7 @@ export default withSupabase({ auth: "user" }, async (req, ctx) => {
   } = await ctx.supabase
     .schema("logistics")
     .rpc("has_permission", {
-      permission_name: "USER_MANAGE",
+      requested_permission: "USER_MANAGE",
     });
 
   if (permissionError || hasUserManage !== true) {
@@ -187,11 +187,11 @@ export default withSupabase({ auth: "user" }, async (req, ctx) => {
   } = await ctx.supabaseAdmin
     .schema("logistics")
     .from("roles")
-    .select("role_id, role_code, is_active")
+    .select("role_id, role_code, active")
     .eq("role_code", roleCode)
     .maybeSingle();
 
-  if (roleError || !role || role.is_active !== true) {
+  if (roleError || !role || role.active !== true) {
     return json(400, {
       error: "Invalid or inactive role",
     });
