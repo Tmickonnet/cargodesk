@@ -144,7 +144,8 @@ create table logistics.readiness_human_decision (
   created_at timestamptz not null default now(),
   constraint readiness_human_decision_ck check (
     decision in ('APPROVE','REJECT','RETURN_FOR_CORRECTION','DEFER')
-  )
+  ),
+  constraint readiness_human_decision_unique_evaluation unique (readiness_evaluation_id)
 );
 
 create index readiness_evaluation_shipment_idx
