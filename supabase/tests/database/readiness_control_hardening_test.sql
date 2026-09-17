@@ -5,7 +5,7 @@
 -- production-like rows can be safely discovered.
 
 begin;
-select plan(11);
+select plan(12);
 
 select ok(
   (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -123,6 +123,16 @@ select ok(
      and p.proname='enforce_readiness_authorization_sod'
      and pg_get_functiondef(p.oid) like '%new.decided_by = v_evaluated_by%') = 1,
   'SoD validator explicitly rejects evaluator self-authorization'
+);
+
+select ok(
+  (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='logistics'
+     and p.proname='protect_readiness_child_lifecycle'
+     and pg_get_functiondef(p.oid) like '%v_new_evaluation_id%'
+     and pg_get_functiondef(p.oid) like '%v_new_lifecycle_status%'
+     and pg_get_functiondef(p.oid) like '%Readiness child cannot be re-parented into a finalized or superseded evaluation%') = 1,
+  'child lifecycle protection rejects re-parenting into a finalized or superseded evaluation'
 );
 
 select * from finish();
