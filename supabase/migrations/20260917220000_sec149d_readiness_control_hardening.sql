@@ -140,9 +140,6 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_validate_readiness_evidence_shipment
-  on logistics.readiness_evidence_reference;
-
 create trigger trg_validate_readiness_evidence_shipment
 before insert or update on logistics.readiness_evidence_reference
 for each row
@@ -217,32 +214,20 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_protect_readiness_evaluation_lifecycle
-  on logistics.readiness_evaluation;
-
 create trigger trg_protect_readiness_evaluation_lifecycle
 before update or delete on logistics.readiness_evaluation
 for each row
 execute function logistics.protect_readiness_evaluation_lifecycle();
-
-drop trigger if exists trg_protect_readiness_rule_result_lifecycle
-  on logistics.readiness_rule_result;
 
 create trigger trg_protect_readiness_rule_result_lifecycle
 before update or delete on logistics.readiness_rule_result
 for each row
 execute function logistics.protect_readiness_child_lifecycle();
 
-drop trigger if exists trg_protect_readiness_evidence_lifecycle
-  on logistics.readiness_evidence_reference;
-
 create trigger trg_protect_readiness_evidence_lifecycle
 before update or delete on logistics.readiness_evidence_reference
 for each row
 execute function logistics.protect_readiness_child_lifecycle();
-
-drop trigger if exists trg_protect_readiness_human_decision
-  on logistics.readiness_human_decision;
 
 create trigger trg_protect_readiness_human_decision
 before update or delete on logistics.readiness_human_decision
@@ -281,9 +266,6 @@ begin
   return new;
 end;
 $$;
-
-drop trigger if exists trg_enforce_readiness_authorization_sod
-  on logistics.readiness_human_decision;
 
 create trigger trg_enforce_readiness_authorization_sod
 before insert on logistics.readiness_human_decision
