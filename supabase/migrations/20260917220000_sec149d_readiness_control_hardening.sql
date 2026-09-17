@@ -172,31 +172,48 @@ security invoker
 set search_path = logistics, pg_catalog
 as $$
 declare
-  v_evaluation_id bigint;
-  v_lifecycle_status text;
+  v_old_evaluation_id bigint;
+  v_new_evaluation_id bigint;
+  v_old_lifecycle_status text;
+  v_new_lifecycle_status text;
 begin
   if tg_table_name = 'readiness_rule_result' then
-    v_evaluation_id := old.readiness_evaluation_id;
+    v_old_evaluation_id := old.readiness_evaluation_id;
+    v_new_evaluation_id := new.readiness_evaluation_id;
   elsif tg_table_name = 'readiness_evidence_reference' then
     select rr.readiness_evaluation_id
-      into v_evaluation_id
+      into v_old_evaluation_id
     from logistics.readiness_rule_result rr
     where rr.readiness_rule_result_id = old.readiness_rule_result_id;
+
+    select rr.readiness_evaluation_id
+      into v_new_evaluation_id
+    from logistics.readiness_rule_result rr
+    where rr.readiness_rule_result_id = new.readiness_rule_result_id;
   else
     raise exception 'Unsupported readiness child table for lifecycle protection';
   end if;
 
   select lifecycle_status
-    into v_lifecycle_status
+    into v_old_lifecycle_status
   from logistics.readiness_evaluation
-  where readiness_evaluation_id = v_evaluation_id;
+  where readiness_evaluation_id = v_old_evaluation_id;
 
-  if v_lifecycle_status in ('DECIDED','SUPERSEDED') then
+  if v_old_lifecycle_status in ('DECIDED','SUPERSEDED') then
     raise exception 'Readiness child evidence is immutable after evaluation finalization';
   end if;
 
   if tg_op = 'DELETE' then
     raise exception 'Readiness child records are immutable; create a new evaluation version instead';
+  end if;
+
+  select lifecycle_status
+    into v_new_lifecycle_status
+  from logistics.readiness_evaluation
+  where readiness_evaluation_id = v_new_evaluation_id;
+
+  if v_new_lifecycle_status in ('DECIDED','SUPERSEDED') then
+    raise exception 'Readiness child cannot be re-parented into a finalized or superseded evaluation';
   end if;
 
   return new;
