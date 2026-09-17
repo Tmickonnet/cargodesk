@@ -9,7 +9,7 @@ select col_has_check('logistics','readiness_evaluation','system_result','system 
 select col_has_check('logistics','readiness_rule_result','result_status','rule result status is constrained');
 select col_has_check('logistics','readiness_evidence_reference','applicability','evidence applicability is constrained');
 select col_has_check('logistics','readiness_evidence_reference','conflict_status','evidence conflict status is constrained');
-select col_has_check('logistics','readiness_evidence_reference','shipment_id','evidence has shipment scope');
+select col_not_null('logistics','readiness_evidence_reference','shipment_id','evidence has mandatory shipment scope');
 select col_has_check('logistics','readiness_human_decision','decision','human decision values are constrained');
 
 select * from finish();
