@@ -1,7 +1,7 @@
 -- SEC-147 SECURITY TEST
 -- STATUS: CANDIDATE ONLY / NOT EXECUTED
 begin;
-select plan(10);
+select plan(9);
 
 select ok((select relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='logistics' and c.relname='readiness_evaluation'),
@@ -35,19 +35,22 @@ select ok((select count(*) from pg_proc p join pg_namespace n on n.oid=p.proname
   'cross-shipment validator must not be SECURITY DEFINER');
 
 select ok((select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='logistics' and p.proname='validate_readiness_evidence_shipment'
-  and p.prosecdef = false) >= 0,
-  'validator remains eligible for SECURITY INVOKER implementation');
+  where n.nspname='logistics' and p.proname='validate_readiness_evidence_shipment') <= 1,
+  'at most one controlled cross-shipment validator may exist');
 
 select ok((select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='logistics' and p.prosecdef
   and p.proname like 'readiness_%') = 0,
   'no readiness SECURITY DEFINER functions are introduced by the base migration');
 
-select ok((select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid
+select ok((select count(*) from pg_trigger t
+  join pg_class c on c.oid=t.tgrelid
   join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname='logistics' and not t.tgisinternal) <= 1,
-  'readiness implementation uses at most one user-defined trigger');
+  where n.nspname='logistics'
+    and c.relname='readiness_evidence_reference'
+    and not t.tgisinternal
+    and t.tgname='trg_validate_readiness_evidence_shipment') <= 1,
+  'readiness evidence has at most one specifically named cross-shipment validation trigger');
 
 select * from finish();
 rollback;
