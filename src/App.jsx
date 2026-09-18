@@ -359,6 +359,27 @@ function App() {
       results.map(([key, data]) => [key, data])
     );
 
+    const documentIds = detail.documents
+      .map((row) => row.document_id)
+      .filter(Boolean);
+
+    if (documentIds.length) {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("*")
+        .in("document_id", documentIds);
+
+      if (error) {
+        setShipmentDetailError(error.message || "Unable to load document records.");
+        setShipmentDetailLoading(false);
+        return;
+      }
+
+      detail.documentRecords = data || [];
+    } else {
+      detail.documentRecords = [];
+    }
+
     if (detail.shipmentContainers.length) {
       const containerIds = detail.shipmentContainers
         .map((row) => row.container_id)
@@ -522,7 +543,8 @@ function App() {
             ["Cargo", shipmentDetail.cargo],
             ["Shipment Containers", shipmentDetail.shipmentContainers],
             ["Containers", shipmentDetail.containers],
-            ["Documents", shipmentDetail.documents],
+            ["Shipment Documents", shipmentDetail.documents],
+            ["Documents", shipmentDetail.documentRecords],
             ["Tracking Events", shipmentDetail.tracking],
             ["Exceptions", shipmentDetail.exceptions],
             ["Delivery", shipmentDetail.delivery],
