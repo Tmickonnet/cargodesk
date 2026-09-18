@@ -286,6 +286,126 @@ function App() {
 
   const isDashboard = activePage === "Dashboard";
 
+  const [shipments, setShipments] = useState([]);
+  const [shipmentSearch, setShipmentSearch] = useState("");
+  const [shipmentLoading, setShipmentLoading] = useState(false);
+  const [shipmentError, setShipmentError] = useState("");
+  const [selectedShipmentId, setSelectedShipmentId] = useState(null);
+  const [shipmentDetail, setShipmentDetail] = useState(null);
+  const [shipmentDetailLoading, setShipmentDetailLoading] = useState(false);
+  const [shipmentDetailError, setShipmentDetailError] = useState("");
+
+  const loadShipments = async () => {
+    setShipmentLoading(true);
+    setShipmentError("");
+
+    const { data, error } = await supabase
+      .from("shipments")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("CargoDesk shipment list query failed:", error);
+      setShipmentError(error.message || "Unable to load shipments.");
+      setShipments([]);
+    } else {
+      setShipments(data || []);
+    }
+
+    setShipmentLoading(false);
+  };
+
+  const loadShipmentDetail = async (shipmentId) => {
+    setSelectedShipmentId(shipmentId);
+    setShipmentDetailLoading(true);
+    setShipmentDetailError("");
+    setShipmentDetail(null);
+
+    const queries = [
+      ["booking", "bookings", "shipment_id"],
+      ["legs", "shipment_legs", "shipment_id"],
+      ["milestones", "shipment_milestone", "shipment_id"],
+      ["cargo", "shipment_cargo", "shipment_id"],
+      ["shipmentContainers", "shipment_container", "shipment_id"],
+      ["documents", "shipment_documents", "shipment_id"],
+      ["tracking", "tracking_event", "shipment_id"],
+      ["exceptions", "shipment_exception", "shipment_id"],
+      ["delivery", "delivery", "shipment_id"],
+    ];
+
+    const results = await Promise.all(
+      queries.map(async ([key, table, column]) => {
+        const { data, error } = await supabase
+          .from(table)
+          .select("*")
+          .eq(column, shipmentId)
+          .order("created_at", { ascending: false });
+
+        return [key, data || [], error];
+      })
+    );
+
+    const failed = results.find(([, , error]) => error);
+    if (failed) {
+      console.error("CargoDesk shipment detail query failed:", failed[2]);
+      setShipmentDetailError(
+        failed[2]?.message || "Unable to load shipment details."
+      );
+      setShipmentDetailLoading(false);
+      return;
+    }
+
+    const detail = Object.fromEntries(
+      results.map(([key, data]) => [key, data])
+    );
+
+    if (detail.shipmentContainers.length) {
+      const containerIds = detail.shipmentContainers
+        .map((row) => row.container_id)
+        .filter(Boolean);
+
+      if (containerIds.length) {
+        const { data, error } = await supabase
+          .from("containers")
+          .select("*")
+          .in("container_id", containerIds);
+
+        if (error) {
+          setShipmentDetailError(error.message || "Unable to load containers.");
+          setShipmentDetailLoading(false);
+          return;
+        }
+
+        detail.containers = data || [];
+      } else {
+        detail.containers = [];
+      }
+    } else {
+      detail.containers = [];
+    }
+
+    setShipmentDetail(detail);
+    setShipmentDetailLoading(false);
+  };
+
+  useEffect(() => {
+    if (!session || authorizationLoading || !role || activePage !== "Shipments") {
+      return;
+    }
+
+    loadShipments();
+  }, [session, authorizationLoading, role, activePage]);
+
+  useEffect(() => {
+    if (!session || authorizationLoading || !role || activePage !== "Shipments") {
+      return;
+    }
+
+    setSelectedShipmentId(null);
+    setShipmentDetail(null);
+    setShipmentDetailError("");
+  }, [session, authorizationLoading, role, activePage]);
+
   const handleNavigation = (item) => {
     if (authorizationLoading || !role || allowedNavigation[item] !== true) {
       return;
@@ -294,14 +414,192 @@ function App() {
     setActivePage(item);
   };
 
-  const visibleNavigationGroups = navigationGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter(
-        (item) => allowedNavigation[item] === true
-      ),
-    }))
-    .filter((group) => group.items.length > 0);
+  const filteredShipments = shipments.filter((shipment) => {
+    const query = shipmentSearch.trim().toLowerCase();
+    if (!query) return true;
+
+    return [
+      shipment.shipment_number,
+      shipment.shipment_id,
+      shipment.special_instructions,
+    ].some((value) =>
+      String(value ?? "").toLowerCase().includes(query)
+    );
+  });
+
+  const formatDate = (value) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString();
+  };
+
+  const renderValue = (value) =>
+    value === null || value === undefined || value === "" ? "—" : String(value);
+
+  const renderShipmentsModule = () => {
+    if (selectedShipmentId && shipmentDetail) {
+      const selected = shipments.find(
+        (shipment) => shipment.shipment_id === selectedShipmentId
+      );
+
+      return (
+        <section>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedShipmentId(null);
+              setShipmentDetail(null);
+              setShipmentDetailError("");
+            }}
+            style={{
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              cursor: "pointer",
+              color: "#1f5f95",
+              fontSize: "13px",
+              fontWeight: "600",
+              marginBottom: "18px",
+            }}
+          >
+            ← Back to Shipment List
+          </button>
+
+          <div style={{
+            background: "#ffffff",
+            border: "1px solid #e5e9f0",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "18px",
+            boxShadow: "0 2px 8px rgba(16,42,67,0.04)"
+          }}>
+            <div style={{fontSize:"11px",fontWeight:"700",color:"#627d98",textTransform:"uppercase",letterSpacing:"0.7px"}}>Shipment Detail</div>
+            <h2 style={{margin:"7px 0 6px",fontSize:"25px",color:"#173b6c"}}>{renderValue(selected?.shipment_number)}</h2>
+            <div style={{fontSize:"12px",color:"#627d98"}}>Shipment ID: {renderValue(selectedShipmentId)}</div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:"16px"}}>
+            {[
+              ["Identity", [
+                ["Shipment Number", selected?.shipment_number],
+                ["Shipment Type ID", selected?.shipment_type_id],
+                ["Shipment Status ID", selected?.shipment_status_id],
+                ["Customer ID", selected?.customer_id],
+                ["Supplier ID", selected?.supplier_id],
+              ]],
+              ["Planning", [
+                ["Cargo Ready", selected?.cargo_ready_date],
+                ["Planned Departure", selected?.planned_departure_date],
+                ["Planned Arrival", selected?.planned_arrival_date],
+                ["Actual Departure", selected?.actual_departure_date],
+                ["Actual Arrival", selected?.actual_arrival_date],
+              ]],
+              ["Route", [
+                ["Origin Location ID", selected?.origin_location_id],
+                ["Destination Location ID", selected?.destination_location_id],
+                ["Origin Country ID", selected?.origin_country_id],
+                ["Destination Country ID", selected?.destination_country_id],
+                ["Transport Mode ID", selected?.primary_transport_mode_id],
+              ]],
+            ].map(([title, fields]) => (
+              <div key={title} style={{background:"#fff",border:"1px solid #e5e9f0",borderRadius:"12px",padding:"18px"}}>
+                <h3 style={{margin:"0 0 14px",fontSize:"15px",color:"#173b6c"}}>{title}</h3>
+                {fields.map(([label,value]) => (
+                  <div key={label} style={{display:"flex",justifyContent:"space-between",gap:"12px",padding:"8px 0",borderTop:"1px solid #eef2f7",fontSize:"12px"}}>
+                    <span style={{color:"#627d98"}}>{label}</span>
+                    <strong style={{color:"#334e68",textAlign:"right"}}>{renderValue(value)}</strong>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {[
+            ["Booking", shipmentDetail.booking],
+            ["Route / Legs", shipmentDetail.legs],
+            ["Milestones", shipmentDetail.milestones],
+            ["Cargo", shipmentDetail.cargo],
+            ["Shipment Containers", shipmentDetail.shipmentContainers],
+            ["Containers", shipmentDetail.containers],
+            ["Documents", shipmentDetail.documents],
+            ["Tracking Events", shipmentDetail.tracking],
+            ["Exceptions", shipmentDetail.exceptions],
+            ["Delivery", shipmentDetail.delivery],
+          ].map(([title, rows]) => (
+            <div key={title} style={{background:"#fff",border:"1px solid #e5e9f0",borderRadius:"12px",padding:"18px",marginTop:"16px",overflowX:"auto"}}>
+              <h3 style={{margin:"0 0 12px",fontSize:"16px",color:"#173b6c"}}>{title}</h3>
+              {rows?.length ? (
+                <div style={{fontSize:"12px",color:"#334e68"}}>
+                  {rows.map((row, index) => (
+                    <details key={row.id || row[Object.keys(row)[0]] || index} style={{borderTop:"1px solid #eef2f7",padding:"9px 0"}}>
+                      <summary style={{cursor:"pointer",fontWeight:"600"}}>
+                        {row.shipment_number || row.booking_number || row.container_number || row.document_id || row.event_reference || row.exception_reference || row.delivery_reference || row.milestone_name || row.cargo_description || row.proof_of_delivery_id || `Record ${index + 1}`}
+                      </summary>
+                      <pre style={{whiteSpace:"pre-wrap",wordBreak:"break-word",margin:"10px 0 0",fontFamily:"inherit",color:"#627d98"}}>{JSON.stringify(row, null, 2)}</pre>
+                    </details>
+                  ))}
+                </div>
+              ) : (
+                <div style={{fontSize:"12px",color:"#829ab1"}}>No records found for this shipment.</div>
+              )}
+            </div>
+          ))}
+        </section>
+      );
+    }
+
+    return (
+      <section>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:"16px",flexWrap:"wrap",marginBottom:"18px"}}>
+          <div>
+            <div style={{fontSize:"12px",fontWeight:"600",color:"#627d98",textTransform:"uppercase",letterSpacing:"0.6px"}}>Operations</div>
+            <h1 style={{margin:"6px 0 5px",fontSize:"28px",color:"#173b6c"}}>Shipments</h1>
+            <p style={{margin:0,color:"#627d98",fontSize:"14px"}}>Read-only shipment visibility using the existing CargoDesk database foundation.</p>
+          </div>
+          <button type="button" onClick={loadShipments} disabled={shipmentLoading} style={{border:"1px solid #d9e2ec",borderRadius:"7px",padding:"9px 13px",background:"#fff",color:"#334e68",fontSize:"12px",fontWeight:"600",cursor:shipmentLoading?"not-allowed":"pointer"}}>{shipmentLoading?"Refreshing…":"Refresh"}</button>
+        </div>
+
+        <div style={{background:"#fff",border:"1px solid #e5e9f0",borderRadius:"12px",padding:"16px",marginBottom:"18px"}}>
+          <label htmlFor="shipment-search" style={{display:"block",fontSize:"11px",fontWeight:"700",color:"#627d98",marginBottom:"7px",textTransform:"uppercase",letterSpacing:"0.6px"}}>Search</label>
+          <input id="shipment-search" value={shipmentSearch} onChange={(event)=>setShipmentSearch(event.target.value)} placeholder="Search shipment number, ID, or instructions" style={{width:"100%",boxSizing:"border-box",border:"1px solid #cbd5e0",borderRadius:"8px",padding:"11px 12px",fontSize:"13px",color:"#172033"}} />
+        </div>
+
+        {shipmentError && <div style={{background:"#fff5f5",border:"1px solid #fed7d7",borderRadius:"8px",padding:"12px",marginBottom:"16px",color:"#b83232",fontSize:"12px"}}>{shipmentError}</div>}
+
+        <div style={{background:"#fff",border:"1px solid #e5e9f0",borderRadius:"12px",overflowX:"auto"}}>
+          {shipmentLoading ? (
+            <div style={{padding:"28px",fontSize:"13px",color:"#627d98"}}>Loading shipments…</div>
+          ) : filteredShipments.length ? (
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:"760px"}}>
+              <thead>
+                <tr style={{background:"#f5f7fb",textAlign:"left"}}>
+                  {["Shipment","Status ID","Transport Mode ID","Planned Departure","Planned Arrival","Actual Departure","Actual Arrival"].map((heading)=>(
+                    <th key={heading} style={{padding:"12px",fontSize:"11px",color:"#627d98",textTransform:"uppercase",letterSpacing:"0.4px",borderBottom:"1px solid #e5e9f0"}}>{heading}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredShipments.map((shipment)=>(
+                  <tr key={shipment.shipment_id} onClick={()=>loadShipmentDetail(shipment.shipment_id)} style={{cursor:"pointer",borderBottom:"1px solid #eef2f7"}}>
+                    <td style={{padding:"13px 12px",fontSize:"13px",fontWeight:"700",color:"#1f5f95"}}>{shipment.shipment_number}</td>
+                    <td style={{padding:"13px 12px",fontSize:"12px",color:"#334e68"}}>{renderValue(shipment.shipment_status_id)}</td>
+                    <td style={{padding:"13px 12px",fontSize:"12px",color:"#334e68"}}>{renderValue(shipment.primary_transport_mode_id)}</td>
+                    <td style={{padding:"13px 12px",fontSize:"12px",color:"#627d98"}}>{formatDate(shipment.planned_departure_date)}</td>
+                    <td style={{padding:"13px 12px",fontSize:"12px",color:"#627d98"}}>{formatDate(shipment.planned_arrival_date)}</td>
+                    <td style={{padding:"13px 12px",fontSize:"12px",color:"#627d98"}}>{formatDate(shipment.actual_departure_date)}</td>
+                    <td style={{padding:"13px 12px",fontSize:"12px",color:"#627d98"}}>{formatDate(shipment.actual_arrival_date)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{padding:"28px",fontSize:"13px",color:"#627d98"}}>No shipments match the current search.</div>
+          )}
+        </div>
+      </section>
+    );
+  };
 
   if (authLoading) {
     return (
