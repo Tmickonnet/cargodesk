@@ -435,6 +435,13 @@ function App() {
     setActivePage(item);
   };
 
+  const visibleNavigationGroups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => allowedNavigation[item] === true),
+    }))
+    .filter((group) => group.items.length > 0);
+
   const filteredShipments = shipments.filter((shipment) => {
     const query = shipmentSearch.trim().toLowerCase();
     if (!query) return true;
