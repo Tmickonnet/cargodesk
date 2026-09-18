@@ -1518,6 +1518,8 @@ function App() {
                 </p>
               </section>
             </>
+          ) : activePage === "Shipments" ? (
+            renderShipmentsModule()
           ) : (
             <>
               {/* Module workspace */}
