@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
+import ShipmentTrackingWorkspace from "./components/ShipmentTrackingWorkspace";
 
 const navigationGroups = [
   {
@@ -1220,114 +1221,27 @@ function App() {
                 </p>
               </section>
             </>
+          ) : activePage === "Shipments" ? (
+            <ShipmentTrackingWorkspace />
           ) : (
-            <>
-              {/* Module workspace */}
-              <div
-                style={{
-                  marginBottom: "22px",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleNavigation("Dashboard")}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    padding: 0,
-                    cursor:
-                      allowedNavigation.Dashboard === true
-                        ? "pointer"
-                        : "not-allowed",
-                    color: "#1f5f95",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    marginBottom: "20px",
-                  }}
-                >
-                  ← Back to Dashboard
-                </button>
-
-                <div
-                  style={{
-                    background: "#ffffff",
-                    border: "1px solid #e5e9f0",
-                    borderRadius: "12px",
-                    padding: "28px",
-                    boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: "600",
-                      color: "#1f7a5a",
-                      marginBottom: "16px",
-                      letterSpacing: "0.7px",
-                    }}
-                  >
-                    MODULE READY
-                  </div>
-
-                  <h2
-                    style={{
-                      margin: "0 0 10px",
-                      fontSize: "24px",
-                      color: "#173b6c",
-                    }}
-                  >
-                    {activePage}
-                  </h2>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      maxWidth: "760px",
-                      color: "#627d98",
-                      fontSize: "14px",
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {moduleDescriptions[activePage] ||
-                      "This CargoDesk Global module is ready for controlled implementation steps."}
-                  </p>
-
-                  <div
-                    style={{
-                      marginTop: "24px",
-                      padding: "18px",
-                      background: "#f5f7fb",
-                      borderRadius: "8px",
-                      border: "1px solid #e5e9f0",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: "600",
-                        color: "#334e68",
-                        marginBottom: "6px",
-                      }}
-                    >
-                      Implementation status
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        color: "#627d98",
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      Navigation is active. The operational interface and
-                      database-connected functionality for this module will be
-                      introduced through controlled implementation steps.
-                    </div>
+            <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "28px", boxShadow: "0 2px 8px rgba(16,42,67,0.04)" }}>
+              <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>
+                ← Back to Dashboard
+              </button>
+              <div>
+                <div style={{ fontSize: "12px", fontWeight: "600", color: "#1f7a5a", marginBottom: "16px", letterSpacing: "0.7px" }}>MODULE READY</div>
+                <h2 style={{ margin: "0 0 10px", fontSize: "24px", color: "#173b6c" }}>{activePage}</h2>
+                <p style={{ margin: 0, maxWidth: "760px", color: "#627d98", fontSize: "14px", lineHeight: 1.7 }}>
+                  {moduleDescriptions[activePage] || "This CargoDesk Global module is ready for controlled implementation steps."}
+                </p>
+                <div style={{ marginTop: "24px", padding: "18px", background: "#f5f7fb", borderRadius: "8px", border: "1px solid #e5e9f0" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "600", color: "#334e68", marginBottom: "6px" }}>Implementation status</div>
+                  <div style={{ fontSize: "13px", color: "#627d98", lineHeight: 1.6 }}>
+                    Navigation is active. The operational interface and database-connected functionality for this module will be introduced through controlled implementation steps.
                   </div>
                 </div>
               </div>
-            </>
-          )}
+            </section>}
         </main>
       </div>
     </div>
