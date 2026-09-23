@@ -497,8 +497,7 @@ function App() {
   const renderValue = (value) =>
     value === null || value === undefined || value === "" ? "—" : String(value);
 
-  const renderShipmentsModule = () => {
-    if (selectedShipmentId && shipmentDetail) {
+  const renderShipmentsModule = () => {    if (selectedShipmentId && shipmentDetail) {
       const selected = shipments.find(
         (shipment) => shipment.shipment_id === selectedShipmentId
       );
@@ -997,8 +996,7 @@ function App() {
               color: "#ffffff",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 20px",
+              justifyContent: "center",              margin: "0 auto 20px",
               fontWeight: "700",
               fontSize: "20px",
             }}
@@ -1526,3 +1524,169 @@ function App() {
                   </div>
                 ))}
               </div>
+              {/* Operations overview */}
+              <section
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e5e9f0",
+                  borderRadius: "12px",
+                  padding: "24px",
+                  boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#627d98",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.6px",
+                  }}
+                >
+                  Operations
+                </div>
+
+                <h2
+                  style={{
+                    margin: "0 0 10px",
+                    fontSize: "20px",
+                    color: "#173b6c",
+                  }}
+                >
+                  Operations Overview
+                </h2>
+
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#627d98",
+                    fontSize: "14px",
+                    lineHeight: 1.7,
+                  }}
+                >
+                  CargoDesk Global is being developed as a centralized
+                  logistics operations platform for shipment management,
+                  documentation, container visibility, warehouse coordination,
+                  shipping activities, delivery management, reporting, and
+                  auditability.
+                </p>
+              </section>
+            </>
+          ) : activePage === "Shipments" ? (
+            renderShipmentsModule()
+          ) : (
+            <>
+              {/* Module workspace */}
+              <div
+                style={{
+                  marginBottom: "22px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleNavigation("Dashboard")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor:
+                      allowedNavigation.Dashboard === true
+                        ? "pointer"
+                        : "not-allowed",
+                    color: "#1f5f95",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginBottom: "20px",
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+
+                <div
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid #e5e9f0",
+                    borderRadius: "12px",
+                    padding: "28px",
+                    boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#1f7a5a",
+                      marginBottom: "16px",
+                      letterSpacing: "0.7px",
+                    }}
+                  >
+                    MODULE READY
+                  </div>
+
+                  <h2
+                    style={{
+                      margin: "0 0 10px",
+                      fontSize: "24px",
+                      color: "#173b6c",
+                    }}
+                  >
+                    {activePage}
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      maxWidth: "760px",
+                      color: "#627d98",
+                      fontSize: "14px",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {moduleDescriptions[activePage] ||
+                      "This CargoDesk Global module is ready for controlled implementation steps."}
+                  </p>
+
+                  <div
+                    style={{
+                      marginTop: "24px",
+                      padding: "18px",
+                      background: "#f5f7fb",
+                      borderRadius: "8px",
+                      border: "1px solid #e5e9f0",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: "#334e68",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      Implementation status
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "#627d98",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Navigation is active. The operational interface and
+                      database-connected functionality for this module will be
+                      introduced through controlled implementation steps.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export default App;
