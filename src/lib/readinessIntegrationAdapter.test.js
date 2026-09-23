@@ -26,6 +26,15 @@ test("R6: non-final document lifecycle state is not treated as verified", () => 
   assert.equal(result.evidence[2].verified, true);
 });
 
+test("R6: unavailable document lifecycle status remains indeterminate", () => {
+  const result = createReadinessIntegrationInput({
+    documents: [{ document_id: 4, document_status_id: 1 }],
+  });
+
+  assert.equal(result.evidence[0].status, "UNKNOWN");
+  assert.equal(result.evidence[0].verified, null);
+});
+
 test("R1: required evidence is supplied only by the approved rule input", () => {
   const result = createReadinessIntegrationInput({
     documents: [{ document_id: 1, document_status_code: "ISSUED" }],
