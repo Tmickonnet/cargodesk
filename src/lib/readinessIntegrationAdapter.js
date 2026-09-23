@@ -10,7 +10,7 @@
  * - does not infer readiness from shipment status;
  * - does not invent required evidence policy;
  * - treats non-final document lifecycle states as unverified evidence;
- * - fails safely when applicability cannot be established.
+ * - fails safely when document lifecycle cannot be determined.
  */
 
 const isObject = (value) =>
@@ -32,14 +32,17 @@ export const createReadinessIntegrationInput = ({
     ? applicability
     : { status: "UNKNOWN" };
 
-  const evidence = list(documents).map((document) => ({
-    id: document?.document_id ?? document?.id,
-    status: document?.document_status_code ?? document?.status ?? "UNKNOWN",
-    verified: FINAL_DOCUMENT_STATUSES.has(
-      document?.document_status_code ?? document?.status
-    ),
-    sourceType: "DOCUMENT",
-  }));
+  const evidence = list(documents).map((document) => {
+    const statusCode = document?.document_status_code ?? document?.status ?? null;
+    const hasStatusCode = typeof statusCode === "string" && statusCode.trim() !== "";
+
+    return {
+      id: document?.document_id ?? document?.id,
+      status: hasStatusCode ? statusCode : "UNKNOWN",
+      verified: hasStatusCode ? FINAL_DOCUMENT_STATUSES.has(statusCode) : null,
+      sourceType: "DOCUMENT",
+    };
+  });
 
   const requiredEvidence = list(rules?.requiredEvidence).map((requirement) => ({
     id: requirement?.id,
@@ -51,7 +54,8 @@ export const createReadinessIntegrationInput = ({
   const normalizedExceptions = list(exceptions).map((exception) => ({
     id: exception?.shipment_exception_id ?? exception?.id,
     status: exception?.status ?? "UNKNOWN",
-    indeterminate: exception?.status === "UNKNOWN" || exception?.status === "INDETERMINATE",
+    indeterminate:
+      exception?.status === "UNKNOWN" || exception?.status === "INDETERMINATE",
   }));
 
   return {
