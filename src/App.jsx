@@ -489,8 +489,10 @@ function App() {
 
   const formatDate = (value) => {
     if (!value) return "—";
+    const stringValue = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(stringValue)) return stringValue;
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
+    if (Number.isNaN(date.getTime())) return stringValue;
     return date.toLocaleString();
   };
 
@@ -524,6 +526,53 @@ function App() {
           >
             ← Back to Shipment List
           </button>
+
+          {shipmentDetailLoading && (
+            <div style={{
+              background: "#f5f7fb",
+              border: "1px solid #d9e2ec",
+              borderRadius: "8px",
+              padding: "12px",
+              marginBottom: "16px",
+              color: "#486581",
+              fontSize: "12px",
+            }}>
+              Loading shipment details…
+            </div>
+          )}
+
+          {shipmentDetailError && (
+            <div style={{
+              background: "#fff5f5",
+              border: "1px solid #fed7d7",
+              borderRadius: "8px",
+              padding: "12px",
+              marginBottom: "16px",
+              color: "#b83232",
+              fontSize: "12px",
+            }}>
+              <div style={{marginBottom: "8px"}}>
+                Unable to load shipment details: {shipmentDetailError}
+              </div>
+              <button
+                type="button"
+                onClick={() => loadShipmentDetail(selectedShipmentId)}
+                disabled={shipmentDetailLoading}
+                style={{
+                  border: "1px solid #b83232",
+                  borderRadius: "7px",
+                  padding: "7px 10px",
+                  background: "#fff",
+                  color: "#b83232",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: shipmentDetailLoading ? "not-allowed" : "pointer",
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           <div style={{
             background: "#ffffff",
@@ -640,8 +689,25 @@ function App() {
               </thead>
               <tbody>
                 {filteredShipments.map((shipment)=>(
-                  <tr key={shipment.shipment_id} onClick={()=>loadShipmentDetail(shipment.shipment_id)} style={{cursor:"pointer",borderBottom:"1px solid #eef2f7"}}>
-                    <td style={{padding:"13px 12px",fontSize:"13px",fontWeight:"700",color:"#1f5f95"}}>{shipment.shipment_number}</td>
+                  <tr key={shipment.shipment_id} style={{borderBottom:"1px solid #eef2f7"}}>
+                    <td style={{padding:"13px 12px",fontSize:"13px",fontWeight:"700",color:"#1f5f95"}}>
+                      <button
+                        type="button"
+                        onClick={() => loadShipmentDetail(shipment.shipment_id)}
+                        style={{
+                          border:"0",
+                          padding:"0",
+                          background:"transparent",
+                          color:"inherit",
+                          font:"inherit",
+                          fontWeight:"inherit",
+                          cursor:"pointer",
+                          textAlign:"left",
+                        }}
+                      >
+                        {shipment.shipment_number}
+                      </button>
+                    </td>
                     <td style={{padding:"13px 12px",fontSize:"12px",color:"#334e68"}}>{renderValue(shipment.shipment_status_id)}</td>
                     <td style={{padding:"13px 12px",fontSize:"12px",color:"#334e68"}}>{renderValue(shipment.primary_transport_mode_id)}</td>
                     <td style={{padding:"13px 12px",fontSize:"12px",color:"#627d98"}}>{formatDate(shipment.planned_departure_date)}</td>
