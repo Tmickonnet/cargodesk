@@ -2,7 +2,8 @@
  * SEC-080H read-only readiness interpreter.
  *
  * This module intentionally contains no Supabase calls and no persistence.
- * The caller supplies already-authorized source data and only approved rules.
+ * The caller supplies already-authorized source data and an explicitly
+ * approved rule set.
  *
  * First implementation scope:
  * - NOT_APPLICABLE
@@ -37,8 +38,8 @@ const hasIndeterminateCondition = (conditions) =>
 /**
  * Interpret readiness from caller-supplied, already-authorized evidence.
  *
- * The interpreter does not decide whether a document/evidence item is
- * required. That policy must be supplied by the approved rule set.
+ * The interpreter does not decide whether evidence is required. That policy
+ * must be supplied by the explicitly approved rule set.
  */
 export const interpretReadiness = (input = {}) => {
   if (!isObject(input)) {
@@ -75,10 +76,10 @@ export const interpretReadiness = (input = {}) => {
     };
   }
 
-  if (!isObject(rules)) {
+  if (!isObject(rules) || rules.approved !== true) {
     return {
       outcome: READINESS_OUTCOMES.REVIEW_REQUIRED,
-      reason: "RULE_SET_INDETERMINATE",
+      reason: "APPROVED_RULE_SET_REQUIRED",
     };
   }
 
@@ -111,14 +112,13 @@ export const interpretReadiness = (input = {}) => {
         exception?.status !== "RESOLVED" &&
         exception?.status !== "CLOSED" &&
         exception?.status !== "NOT_APPLICABLE"
-    )
+    ) &&
+    rules.exceptionPolicy !== "NON_BLOCKING_APPROVED"
   ) {
-    if (rules.exceptionPolicy !== "NON_BLOCKING_APPROVED") {
-      return {
-        outcome: READINESS_OUTCOMES.REVIEW_REQUIRED,
-        reason: "EXCEPTION_REQUIRES_REVIEW",
-      };
-    }
+    return {
+      outcome: READINESS_OUTCOMES.REVIEW_REQUIRED,
+      reason: "EXCEPTION_REQUIRES_REVIEW",
+    };
   }
 
   const required = normalizeList(requiredEvidence);
