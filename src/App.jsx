@@ -1110,8 +1110,13 @@ function App() {
     );
   }
 
-  const isNavigationReady = Object.keys(allowedNavigation).length > 0;
-  const hasAccessibleModule = Object.values(allowedNavigation).some(Boolean);
+  const isNavigationReady =
+    !authorizationLoading &&
+    Boolean(role) &&
+    Object.keys(allowedNavigation).length > 0;
+
+  const hasAccessibleModule =
+    isNavigationReady && Object.values(allowedNavigation).some(Boolean);
 
   return (
     <div
