@@ -31,7 +31,7 @@ test("S02: unresolved conflict returns REVIEW_REQUIRED", () => {
     conflicts: [{ id: "C-1", status: "OPEN" }],
   });
 
-  assert.equal(result.outcome, READINESS_OUTCOMED.REVIEW_REQUIRED);
+  assert.equal(result.outcome, READINESS_OUTCOMES.REVIEW_REQUIRED);
 });
 
 test("S03: draft/unsupported evidence does not promote readiness", () => {
