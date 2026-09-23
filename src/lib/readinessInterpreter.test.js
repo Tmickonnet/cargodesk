@@ -15,7 +15,7 @@ const base = {
   evidence: verifiedEvidence,
   conflicts: [],
   exceptions: [],
-  rules: {},
+  rules: { approved: true },
 };
 
 test("S01: complete evidence returns READY_FOR_REVIEW", () => {
@@ -31,7 +31,7 @@ test("S02: unresolved conflict returns REVIEW_REQUIRED", () => {
     conflicts: [{ id: "C-1", status: "OPEN" }],
   });
 
-  assert.equal(result.outcome, READINESS_OUTCOMES.REVIEW_REQUIRED);
+  assert.equal(result.outcome, READINESS_OUTCOMED.REVIEW_REQUIRED);
 });
 
 test("S03: draft/unsupported evidence does not promote readiness", () => {
@@ -100,6 +100,15 @@ test("protected required evidence is fail-safe", () => {
 
 test("invalid input is fail-safe", () => {
   const result = interpretReadiness(null);
+
+  assert.equal(result.outcome, READINESS_OUTCOMES.REVIEW_REQUIRED);
+});
+
+test("missing approved rule set is fail-safe", () => {
+  const result = interpretReadiness({
+    ...base,
+    rules: {},
+  });
 
   assert.equal(result.outcome, READINESS_OUTCOMES.REVIEW_REQUIRED);
 });
