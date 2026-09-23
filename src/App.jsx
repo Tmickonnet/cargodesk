@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
 
@@ -294,14 +294,16 @@ function App() {
   const [shipmentDetail, setShipmentDetail] = useState(null);
   const [shipmentDetailLoading, setShipmentDetailLoading] = useState(false);
   const [shipmentDetailError, setShipmentDetailError] = useState("");
+  const shipmentDetailRequestRef = useRef(0);
 
   const loadShipments = async () => {
     setShipmentLoading(true);
     setShipmentError("");
-
     const { data, error } = await supabase
       .from("shipments")
-      .select("*")
+      .select(
+        "shipment_id, shipment_number, customer_id, supplier_id, shipment_type_id, shipment_status_id, primary_transport_mode_id, origin_location_id, destination_location_id, origin_country_id, destination_country_id, planned_departure_date, planned_arrival_date, actual_departure_date, actual_arrival_date, cargo_ready_date, special_instructions, created_at"
+      )
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -316,34 +318,44 @@ function App() {
   };
 
   const loadShipmentDetail = async (shipmentId) => {
+    const requestId = shipmentDetailRequestRef.current + 1;
+    shipmentDetailRequestRef.current = requestId;
+
+    const isCurrentRequest = () =>
+      shipmentDetailRequestRef.current === requestId;
+
     setSelectedShipmentId(shipmentId);
     setShipmentDetailLoading(true);
     setShipmentDetailError("");
     setShipmentDetail(null);
 
     const queries = [
-      ["booking", "bookings", "shipment_id"],
-      ["legs", "shipment_legs", "shipment_id"],
-      ["milestones", "shipment_milestone", "shipment_id"],
-      ["cargo", "shipment_cargo", "shipment_id"],
-      ["shipmentContainers", "shipment_container", "shipment_id"],
-      ["documents", "shipment_documents", "shipment_id"],
-      ["tracking", "tracking_event", "shipment_id"],
-      ["exceptions", "shipment_exception", "shipment_id"],
-      ["delivery", "delivery", "shipment_id"],
+      ["booking", "bookings", "shipment_id", "booking_id, shipment_id, booking_number, shipping_line_id, booking_status_id, booking_date, requested_etd, confirmed_etd, requested_eta, confirmed_eta, vessel_id, voyage_number, port_of_loading_id, port_of_discharge_id, place_of_receipt_id, place_of_delivery_id, terminal_id, freight_terms, carrier_reference, created_at, updated_at"],
+      ["legs", "shipment_legs", "shipment_id", "shipment_leg_id, shipment_id, leg_sequence, transport_mode_id, carrier_party_id, shipping_line_id, vessel_id, origin_location_id, destination_location_id, departure_planned_at, departure_actual_at, arrival_planned_at, arrival_actual_at, voyage_number, leg_status, created_at, updated_at"],
+      ["milestones", "shipment_milestone", "shipment_id", "shipment_milestone_id, shipment_id, milestone_code, milestone_name, sequence_number, planned_date, estimated_date, actual_date, completed, completed_by, created_at, updated_at"],
+      ["cargo", "shipment_cargo", "shipment_id", "shipment_cargo_id, shipment_id, commodity_id, cargo_description, hs_code, packaging_type_id, quantity, quantity_uom_id, net_weight, gross_weight, weight_uom_id, volume, volume_uom_id, created_at, updated_at"],
+      ["shipmentContainers", "shipment_container", "shipment_id", "shipment_container_id, shipment_id, container_id, booking_id, container_sequence, seal_number, container_status, planned_stuffing_date, actual_stuffing_date, gate_in_date, gate_out_date, created_at, updated_at"],
+      ["documents", "shipment_documents", "shipment_id", "shipment_document_id, shipment_id, document_id, is_primary, created_at"],
+      ["tracking", "tracking_event", "shipment_id", "tracking_event_id, shipment_id, shipment_leg_id, container_id, tracking_event_type_id, event_reference, event_datetime, estimated_datetime, actual_datetime, location_id, port_id, vessel_id, status_text, created_at, updated_at"],
+      ["exceptions", "shipment_exception", "shipment_id", "shipment_exception_id, shipment_id, container_id, shipment_leg_id, exception_reference, exception_type, severity, reported_at, resolved_at, location_id, description, status, created_at, updated_at"],
+      ["delivery", "delivery", "shipment_id", "delivery_id, shipment_id, delivery_reference, delivery_status_id, customer_id, transporter_id, origin_location_id, destination_location_id, planned_delivery_date, dispatch_date, estimated_delivery_date, actual_delivery_date, vehicle_reference, received_by, created_at, updated_at"],
     ];
 
     const results = await Promise.all(
-      queries.map(async ([key, table, column]) => {
+      queries.map(async ([key, table, column, projection]) => {
         const { data, error } = await supabase
           .from(table)
-          .select("*")
+          .select(projection)
           .eq(column, shipmentId)
           .order("created_at", { ascending: false });
 
         return [key, data || [], error];
       })
     );
+
+    if (!isCurrentRequest()) {
+      return;
+    }
 
     const failed = results.find(([, , error]) => error);
     if (failed) {
@@ -366,11 +378,19 @@ function App() {
     if (documentIds.length) {
       const { data, error } = await supabase
         .from("documents")
-        .select("*")
+        .select(
+          "document_id, document_type_id, document_number, document_title, file_name, file_extension, mime_type, file_size_bytes, version_number, is_current_version, document_status_id, uploaded_by, uploaded_at, expiry_date, description, created_at, updated_at"
+        )
         .in("document_id", documentIds);
 
+      if (!isCurrentRequest()) {
+        return;
+      }
+
       if (error) {
-        setShipmentDetailError(error.message || "Unable to load document records.");
+        setShipmentDetailError(
+          error.message || "Unable to load document records."
+        );
         setShipmentDetailLoading(false);
         return;
       }
@@ -388,11 +408,19 @@ function App() {
       if (containerIds.length) {
         const { data, error } = await supabase
           .from("containers")
-          .select("*")
+          .select(
+            "container_id, container_number, container_type_id, owner_shipping_line_id, tare_weight, tare_weight_uom_id, maximum_gross_weight, maximum_gross_weight_uom_id, container_status, created_at, updated_at"
+          )
           .in("container_id", containerIds);
 
+        if (!isCurrentRequest()) {
+          return;
+        }
+
         if (error) {
-          setShipmentDetailError(error.message || "Unable to load containers.");
+          setShipmentDetailError(
+            error.message || "Unable to load containers."
+          );
           setShipmentDetailLoading(false);
           return;
         }
@@ -403,6 +431,10 @@ function App() {
       }
     } else {
       detail.containers = [];
+    }
+
+    if (!isCurrentRequest()) {
+      return;
     }
 
     setShipmentDetail(detail);
@@ -465,8 +497,7 @@ function App() {
   const renderValue = (value) =>
     value === null || value === undefined || value === "" ? "—" : String(value);
 
-  const renderShipmentsModule = () => {
-    if (selectedShipmentId && shipmentDetail) {
+  const renderShipmentsModule = () => {    if (selectedShipmentId && shipmentDetail) {
       const selected = shipments.find(
         (shipment) => shipment.shipment_id === selectedShipmentId
       );
@@ -597,8 +628,7 @@ function App() {
         {shipmentError && <div style={{background:"#fff5f5",border:"1px solid #fed7d7",borderRadius:"8px",padding:"12px",marginBottom:"16px",color:"#b83232",fontSize:"12px"}}>{shipmentError}</div>}
 
         <div style={{background:"#fff",border:"1px solid #e5e9f0",borderRadius:"12px",overflowX:"auto"}}>
-          {shipmentLoading ? (
-            <div style={{padding:"28px",fontSize:"13px",color:"#627d98"}}>Loading shipments…</div>
+          {shipmentLoading ? (            <div style={{padding:"28px",fontSize:"13px",color:"#627d98"}}>Loading shipments…</div>
           ) : filteredShipments.length ? (
             <table style={{width:"100%",borderCollapse:"collapse",minWidth:"760px"}}>
               <thead>
@@ -897,8 +927,7 @@ function App() {
               />
 
               <button
-                type="submit"
-                disabled={authSubmitting}
+                type="submit"                disabled={authSubmitting}
                 style={{
                   width: "100%",
                   border: "none",
@@ -967,8 +996,7 @@ function App() {
               color: "#ffffff",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 20px",
+              justifyContent: "center",              margin: "0 auto 20px",
               fontWeight: "700",
               fontSize: "20px",
             }}
@@ -1082,8 +1110,13 @@ function App() {
     );
   }
 
-  const isNavigationReady = Object.keys(allowedNavigation).length > 0;
-  const hasAccessibleModule = Object.values(allowedNavigation).some(Boolean);
+  const isNavigationReady =
+    !authorizationLoading &&
+    Boolean(role) &&
+    Object.keys(allowedNavigation).length > 0;
+
+  const hasAccessibleModule =
+    isNavigationReady && Object.values(allowedNavigation).some(Boolean);
 
   return (
     <div
@@ -1197,8 +1230,7 @@ function App() {
             }}
           >
             CD
-          </div>
-        </div>
+          </div>        </div>
       </header>
 
       <div
@@ -1497,7 +1529,6 @@ function App() {
                   </div>
                 ))}
               </div>
-
               {/* Operations overview */}
               <section
                 style={{
