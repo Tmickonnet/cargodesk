@@ -105,6 +105,7 @@ function App() {
     pendingDeliveries: null,
     recentTrackingEvents: null,
     recentShipments: [],
+    recentShipmentsError: "",
     statusNames: {},
   });
   const [dashboardLoading, setDashboardLoading] = useState(false);
@@ -317,6 +318,7 @@ function App() {
           pendingDeliveries: deliveryView ? null : "unavailable",
           recentTrackingEvents: trackingView ? null : "unavailable",
           recentShipments: [],
+          recentShipmentsError: shipmentView ? "" : "unavailable",
           statusNames: {},
         };
         let firstError = "";
@@ -324,6 +326,9 @@ function App() {
         for (const item of results) {
           if (item.result.error) {
             if (!firstError) firstError = item.result.error.message || "Unable to load dashboard data.";
+            if (item.key === "recentShipments") {
+              nextData.recentShipmentsError = item.result.error.message || "Unable to load recent shipments.";
+            }
             continue;
           }
           if (item.key === "shipments") nextData.shipments = item.result.count ?? 0;
@@ -341,6 +346,9 @@ function App() {
           }
         }
 
+        if (shipmentView && nextData.recentShipmentsError === "") {
+          nextData.recentShipmentsError = null;
+        }
         setDashboardData(nextData);
         setDashboardError(firstError);
       } catch (error) {
@@ -1365,6 +1373,14 @@ function App() {
                 {dashboardLoading && dashboardData.recentShipments.length === 0 ? (
                   <div style={{ padding: "14px", background: "#f5f7fb", borderRadius: "8px", color: "#627d98", fontSize: "12px" }}>
                     Loading recent shipments...
+                  </div>
+                ) : dashboardData.recentShipmentsError === "unavailable" ? (
+                  <div style={{ padding: "14px", background: "#f5f7fb", borderRadius: "8px", color: "#627d98", fontSize: "12px" }}>
+                    Shipment activity is not available for this role.
+                  </div>
+                ) : dashboardData.recentShipmentsError ? (
+                  <div style={{ padding: "14px", background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "8px", color: "#b83232", fontSize: "12px", lineHeight: 1.6 }}>
+                    Unable to load recent shipments: {dashboardData.recentShipmentsError}
                   </div>
                 ) : dashboardData.recentShipments.length === 0 ? (
                   <div style={{ padding: "14px", background: "#f5f7fb", borderRadius: "8px", color: "#627d98", fontSize: "12px" }}>
