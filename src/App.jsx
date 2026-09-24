@@ -99,6 +99,16 @@ function App() {
   } = useAuthorization(Boolean(session));
 
   const [allowedNavigation, setAllowedNavigation] = useState({});
+  const [dashboardData, setDashboardData] = useState({
+    shipments: null,
+    openExceptions: null,
+    pendingDeliveries: null,
+    recentTrackingEvents: null,
+    recentShipments: [],
+    statusNames: {},
+  });
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -235,6 +245,121 @@ function App() {
   }, [session, authorizationLoading, role, hasPermission]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboardData = async () => {
+      if (!session || authorizationLoading || !role || allowedNavigation.Dashboard !== true) {
+        return;
+      }
+
+      const shipmentView = allowedNavigation.Shipments === true;
+      const exceptionView = await hasPermission("EXCEPTION_VIEW");
+      const deliveryView = allowedNavigation.Delivery === true;
+      const trackingView = await hasPermission("TRACKING_VIEW");
+
+      if (!isMounted) return;
+
+      setDashboardLoading(true);
+      setDashboardError("");
+
+      try {
+        const requests = [];
+
+        if (shipmentView) {
+          requests.push(
+            supabase.from("shipments").select("shipment_id", { count: "exact", head: true })
+              .then((result) => ({ key: "shipments", result })),
+            supabase.from("shipments")
+              .select("shipment_id, shipment_number, shipment_status_id, planned_departure_date, planned_arrival_date, updated_at")
+              .order("updated_at", { ascending: false }).limit(5)
+              .then((result) => ({ key: "recentShipments", result })),
+            supabase.from("shipment_statuses")
+              .select("shipment_status_id, status_code, status_name")
+              .eq("is_active", true).order("sort_order", { ascending: true })
+              .then((result) => ({ key: "statusNames", result }))
+          );
+        }
+
+        if (exceptionView) {
+          requests.push(
+            supabase.from("shipment_exception")
+              .select("shipment_exception_id", { count: "exact", head: true })
+              .is("resolved_at", null)
+              .then((result) => ({ key: "openExceptions", result }))
+          );
+        }
+
+        if (deliveryView) {
+          requests.push(
+            supabase.from("delivery")
+              .select("delivery_id", { count: "exact", head: true })
+              .is("actual_delivery_date", null)
+              .then((result) => ({ key: "pendingDeliveries", result }))
+          );
+        }
+
+        if (trackingView) {
+          const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          requests.push(
+            supabase.from("tracking_event")
+              .select("tracking_event_id", { count: "exact", head: true })
+              .gte("event_datetime", since)
+              .then((result) => ({ key: "recentTrackingEvents", result }))
+          );
+        }
+
+        const results = await Promise.all(requests);
+        if (!isMounted) return;
+
+        const nextData = {
+          shipments: shipmentView ? null : "unavailable",
+          openExceptions: exceptionView ? null : "unavailable",
+          pendingDeliveries: deliveryView ? null : "unavailable",
+          recentTrackingEvents: trackingView ? null : "unavailable",
+          recentShipments: [],
+          statusNames: {},
+        };
+        let firstError = "";
+
+        for (const item of results) {
+          if (item.result.error) {
+            if (!firstError) firstError = item.result.error.message || "Unable to load dashboard data.";
+            continue;
+          }
+          if (item.key === "shipments") nextData.shipments = item.result.count ?? 0;
+          if (item.key === "openExceptions") nextData.openExceptions = item.result.count ?? 0;
+          if (item.key === "pendingDeliveries") nextData.pendingDeliveries = item.result.count ?? 0;
+          if (item.key === "recentTrackingEvents") nextData.recentTrackingEvents = item.result.count ?? 0;
+          if (item.key === "recentShipments") nextData.recentShipments = item.result.data ?? [];
+          if (item.key === "statusNames") {
+            nextData.statusNames = Object.fromEntries(
+              (item.result.data ?? []).map((status) => [
+                status.shipment_status_id,
+                status.status_name || status.status_code || "Unknown",
+              ])
+            );
+          }
+        }
+
+        setDashboardData(nextData);
+        setDashboardError(firstError);
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("CargoDesk dashboard data load failed:", error);
+        setDashboardError(error.message || "Unable to load dashboard data.");
+      } finally {
+        if (isMounted) setDashboardLoading(false);
+      }
+    };
+
+    loadDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session, authorizationLoading, role, allowedNavigation, hasPermission]);
+
+  useEffect(() => {
     if (!session || authorizationLoading || !role) {
       return;
     }
@@ -285,6 +410,39 @@ function App() {
   };
 
   const isDashboard = activePage === "Dashboard";
+
+  const dashboardCards = [
+    {
+      title: "Accessible Shipments",
+      value: dashboardData.shipments === "unavailable" ? "—" : dashboardData.shipments ?? "…",
+      description: dashboardData.shipments === "unavailable"
+        ? "Not available for this role"
+        : "Shipments available through the existing read path",
+    },
+    {
+      title: "Open Exceptions",
+      value: dashboardData.openExceptions === "unavailable" ? "—" : dashboardData.openExceptions ?? "…",
+      description: dashboardData.openExceptions === "unavailable"
+        ? "Not available for this role"
+        : "Exceptions without a recorded resolution date",
+    },
+    {
+      title: "Pending Deliveries",
+      value: dashboardData.pendingDeliveries === "unavailable" ? "—" : dashboardData.pendingDeliveries ?? "…",
+      description: dashboardData.pendingDeliveries === "unavailable"
+        ? "Not available for this role"
+        : "Deliveries without an actual delivery date",
+    },
+    {
+      title: "Recent Tracking Events",
+      value: dashboardData.recentTrackingEvents === "unavailable" ? "—" : dashboardData.recentTrackingEvents ?? "…",
+      description: dashboardData.recentTrackingEvents === "unavailable"
+        ? "Not available for this role"
+        : "Tracking events recorded during the last 30 days",
+    },
+  ];
+
+
 
   const handleNavigation = (item) => {
     if (authorizationLoading || !role || allowedNavigation[item] !== true) {
@@ -1115,6 +1273,23 @@ function App() {
                 )}
               </section>
 
+              {dashboardError && (
+                <div
+                  style={{
+                    background: "#fff5f5",
+                    border: "1px solid #fed7d7",
+                    borderRadius: "8px",
+                    padding: "12px 13px",
+                    marginBottom: "22px",
+                    color: "#b83232",
+                    fontSize: "12px",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Unable to load some dashboard data: {dashboardError}
+                </div>
+              )}
+
               {/* Dashboard cards */}
               <div
                 style={{
@@ -1170,6 +1345,63 @@ function App() {
                   </div>
                 ))}
               </div>
+
+              <section
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e5e9f0",
+                  borderRadius: "12px",
+                  padding: "24px",
+                  marginBottom: "28px",
+                  boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
+                }}
+              >
+                <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                  Recent shipments
+                </div>
+                <h2 style={{ margin: "0 0 14px", fontSize: "20px", color: "#173b6c" }}>
+                  Latest operational activity
+                </h2>
+                {dashboardLoading && dashboardData.recentShipments.length === 0 ? (
+                  <div style={{ padding: "14px", background: "#f5f7fb", borderRadius: "8px", color: "#627d98", fontSize: "12px" }}>
+                    Loading recent shipments...
+                  </div>
+                ) : dashboardData.recentShipments.length === 0 ? (
+                  <div style={{ padding: "14px", background: "#f5f7fb", borderRadius: "8px", color: "#627d98", fontSize: "12px" }}>
+                    No shipment records are available through the current read path.
+                  </div>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #d9e2ec" }}>
+                          {["Shipment", "Status", "Planned Departure", "Planned Arrival"].map((heading) => (
+                            <th key={heading} style={{ padding: "10px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              {heading}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dashboardData.recentShipments.map((shipment) => (
+                          <tr key={shipment.shipment_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                            <td style={{ padding: "11px 8px", fontSize: "13px", fontWeight: "700", color: "#1f5f95" }}>
+                              <button type="button" onClick={() => handleNavigation("Shipments")} style={{ border: 0, padding: 0, background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", cursor: allowedNavigation.Shipments === true ? "pointer" : "default" }}>
+                                {shipment.shipment_number}
+                              </button>
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
+                              {dashboardData.statusNames[shipment.shipment_status_id] || "Status unavailable"}
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{shipment.planned_departure_date || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{shipment.planned_arrival_date || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
 
               {/* Operations overview */}
               <section
