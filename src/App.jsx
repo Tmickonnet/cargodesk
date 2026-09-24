@@ -894,7 +894,7 @@ function App() {
       });
 
       try {
-        const [documentsResult, linksResult, typesResult, statusesResult] =
+        const [documentsResult, linksResult, typesResult] =
           await Promise.all([
             supabase
               .from("documents")
@@ -2068,7 +2068,7 @@ function App() {
                               {documentationData.typeNames[item.document_type_id] || "—"}
                             </td>
                             <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
-                              {documentationData.statusNames[item.document_status_id] || "—"}
+                              {item.document_status_id ?? "—"}
                             </td>
                             <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
                               {item.shipmentLinks.length
