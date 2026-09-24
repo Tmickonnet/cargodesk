@@ -526,7 +526,7 @@ function App() {
 
 
   const handleNavigation = (item) => {
-    if (authorizationLoading || !role || allowedNavigation[item] !== true) {
+    if (authorizationLoading || !role) {
       return;
     }
 
