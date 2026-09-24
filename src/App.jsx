@@ -111,6 +111,15 @@ function App() {
     unavailable: false,
   });
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [shipmentData, setShipmentData] = useState({
+    shipments: [],
+    statusOptions: [],
+    typeOptions: [],
+    transportModeOptions: [],
+    error: "",
+    unavailable: false,
+  });
+  const [shipmentsLoading, setShipmentsLoading] = useState(false);
 
   const {
     role,
@@ -305,6 +314,7 @@ function App() {
   };
 
   const isDashboard = activePage === "Dashboard";
+  const isShipments = activePage === "Shipments";
   const isWarehouse = activePage === "Warehouse";
   const isReports = activePage === "Reports";
 
@@ -529,6 +539,109 @@ function App() {
       isMounted = false;
     };
   }, [isDashboard, session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadShipmentsWorkspace = async () => {
+      if (!isShipments || !session || authorizationLoading || !role) return;
+
+      const permitted = await hasPermission("SHIPMENT_VIEW");
+      if (!isMounted) return;
+
+      if (!permitted) {
+        setShipmentData({
+          shipments: [],
+          statusOptions: [],
+          typeOptions: [],
+          transportModeOptions: [],
+          error: "",
+          unavailable: true,
+        });
+        setShipmentsLoading(false);
+        return;
+      }
+
+      setShipmentsLoading(true);
+      setShipmentData({
+        shipments: [],
+        statusOptions: [],
+        typeOptions: [],
+        transportModeOptions: [],
+        error: "",
+        unavailable: false,
+      });
+
+      try {
+        const [shipments, statuses, types, modes] = await Promise.all([
+          supabase
+            .from("shipments")
+            .select(
+              "shipment_id, shipment_number, shipment_status_id, shipment_type_id, primary_transport_mode_id, origin_location_id, destination_location_id, planned_departure_date, planned_arrival_date, actual_departure_date, actual_arrival_date, cargo_ready_date, updated_at"
+            )
+            .order("updated_at", { ascending: false, nullsFirst: false })
+            .limit(100),
+          supabase
+            .from("shipment_statuses")
+            .select("shipment_status_id, status_code, status_name, sort_order, is_active")
+            .order("sort_order", { ascending: true }),
+          supabase
+            .from("shipment_types")
+            .select("shipment_type_id, type_code, type_name, is_active")
+            .order("type_code", { ascending: true }),
+          supabase
+            .from("transport_modes")
+            .select("transport_mode_id, mode_code, mode_name, is_active")
+            .order("mode_code", { ascending: true }),
+        ]);
+
+        if (!isMounted) return;
+
+        const firstError = [shipments, statuses, types, modes].find((result) => result?.error)?.error;
+        if (firstError) {
+          console.error("CargoDesk shipment workspace load failed:", firstError);
+          setShipmentData({
+            shipments: [],
+            statusOptions: [],
+            typeOptions: [],
+            transportModeOptions: [],
+            error: firstError.message || "Unable to load shipment activity.",
+            unavailable: false,
+          });
+          return;
+        }
+
+        setShipmentData({
+          shipments: shipments.data ?? [],
+          statusOptions: statuses.data ?? [],
+          typeOptions: types.data ?? [],
+          transportModeOptions: modes.data ?? [],
+          error: "",
+          unavailable: false,
+        });
+      } catch (error) {
+        if (isMounted) {
+          console.error("CargoDesk shipment workspace load failed:", error);
+          setShipmentData({
+            shipments: [],
+            statusOptions: [],
+            typeOptions: [],
+            transportModeOptions: [],
+            error: error.message || "Unable to load shipment activity.",
+            unavailable: false,
+          });
+        }
+      } finally {
+        if (isMounted) setShipmentsLoading(false);
+      }
+    };
+
+    loadShipmentsWorkspace();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isShipments, session, authorizationLoading, role, hasPermission]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1548,7 +1661,97 @@ function App() {
                   </section>
                 </>
               )}
-            </div>          ) : isWarehouse ? (
+            </div>          ) : isShipments ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleNavigation("Dashboard")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed",
+                    color: "#1f5f95",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginBottom: "20px",
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                    Operations
+                  </div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Shipments</h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>
+                    Review shipments through the existing authorized read path. This workspace is read-only in SEC-170.
+                  </p>
+                </div>
+
+                {shipmentsLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    Loading shipments...
+                  </div>
+                ) : shipmentData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>
+                    Shipment activity is not available for this role.
+                  </div>
+                ) : shipmentData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>
+                    Unable to load shipment activity: {shipmentData.error}
+                  </div>
+                ) : (
+                  <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "12px", marginBottom: "14px" }}>
+                      <div>
+                        <h2 style={{ margin: 0, fontSize: "18px", color: "#173b6c" }}>Shipment records</h2>
+                        <p style={{ margin: "6px 0 0", color: "#627d98", fontSize: "12px" }}>
+                          Showing up to 100 records through the authorized shipment read path.
+                        </p>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#627d98" }}>{shipmentData.shipments.length} record(s)</div>
+                    </div>
+                    {shipmentData.shipments.length === 0 ? (
+                      <div style={{ color: "#627d98", fontSize: "13px" }}>No shipment records are available through the authorized read path.</div>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1150px" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid #d9e2ec" }}>
+                            {["Shipment", "Type", "Status", "Mode", "Origin ID", "Destination ID", "Planned Departure", "Planned Arrival", "Updated"].map((heading) => (
+                              <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {shipmentData.shipments.map((item) => {
+                            const status = shipmentData.statusOptions.find((option) => option.shipment_status_id === item.shipment_status_id);
+                            const type = shipmentData.typeOptions.find((option) => option.shipment_type_id === item.shipment_type_id);
+                            const mode = shipmentData.transportModeOptions.find((option) => option.transport_mode_id === item.primary_transport_mode_id);
+                            return (
+                              <tr key={item.shipment_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.shipment_number || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{type?.type_name || type?.type_code || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{status?.status_name || status?.status_code || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{mode?.mode_name || mode?.mode_code || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.origin_location_id ?? "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.destination_location_id ?? "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_departure_date || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_arrival_date || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.updated_at ? new Date(item.updated_at).toLocaleString() : "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </section>
+                )}
+              </div>
+            </>
+          ) : isWarehouse ? (
             <>
               <div style={{ marginBottom: "22px" }}>
                 <button
