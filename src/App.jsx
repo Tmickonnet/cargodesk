@@ -91,6 +91,15 @@ function App() {
   const [connectionStatus, setConnectionStatus] =
     useState("Checking database...");
   const [connectionMessage, setConnectionMessage] = useState("");
+  const [warehouseData, setWarehouseData] = useState({
+    warehouses: [],
+    stuffing: [],
+    weighbridge: [],
+    vgm: [],
+    error: "",
+    unavailable: false,
+  });
+  const [warehouseLoading, setWarehouseLoading] = useState(false);
 
   const {
     role,
@@ -285,6 +294,133 @@ function App() {
   };
 
   const isDashboard = activePage === "Dashboard";
+  const isWarehouse = activePage === "Warehouse";
+
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadWarehouseWorkspace = async () => {
+      if (
+        activePage !== "Warehouse" ||
+        !session ||
+        authorizationLoading ||
+        !role
+      ) {
+        return;
+      }
+
+      const [operationsView, masterDataView] = await Promise.all([
+        hasPermission("OPERATIONS_VIEW"),
+        hasPermission("MASTER_DATA_VIEW"),
+      ]);
+
+      if (!isMounted) return;
+
+      if (!operationsView) {
+        setWarehouseData({
+          warehouses: [],
+          stuffing: [],
+          weighbridge: [],
+          vgm: [],
+          error: "",
+          unavailable: true,
+        });
+        setWarehouseLoading(false);
+        return;
+      }
+
+      setWarehouseLoading(true);
+      setWarehouseData({
+        warehouses: [],
+        stuffing: [],
+        weighbridge: [],
+        vgm: [],
+        error: "",
+        unavailable: false,
+      });
+
+      try {
+        const results = await Promise.all([
+          masterDataView
+            ? supabase
+                .from("warehouses")
+                .select(
+                  "warehouse_id, warehouse_code, warehouse_name, party_id, city, state_region, country_id, capacity_mt, is_active, created_at, updated_at"
+                )
+                .order("updated_at", { ascending: false, nullsFirst: false })
+                .limit(25)
+            : Promise.resolve({ data: [], error: null }),
+          supabase
+            .from("stuffing_record")
+            .select(
+              "stuffing_record_id, shipment_id, container_id, stuffing_reference, stuffing_status_id, warehouse_id, stuffing_location_id, planned_stuffing_date, actual_start_time, actual_end_time, seal_number, package_count, gross_weight, weight_uom_id, stuffing_supervisor, verified_by, created_at, updated_at"
+            )
+            .order("updated_at", { ascending: false, nullsFirst: false })
+            .limit(25),
+          supabase
+            .from("weighbridge_record")
+            .select(
+              "weighbridge_record_id, shipment_id, container_id, weighing_type_id, weighing_reference, weighbridge_ticket_number, weighing_date, gross_weight, tare_weight, net_weight, weight_uom_id, weighbridge_location_id, verified_by, verification_status_id, created_at, updated_at"
+            )
+            .order("updated_at", { ascending: false, nullsFirst: false })
+            .limit(25),
+          supabase
+            .from("container_vgm")
+            .select(
+              "container_vgm_id, shipment_id, container_id, vgm_reference, vgm_weight, weight_uom_id, weighing_method, weighing_date, weighing_location_id, authorized_person, verified_by, verification_status_id, submitted_to_carrier_at, created_at, updated_at"
+            )
+            .order("updated_at", { ascending: false, nullsFirst: false })
+            .limit(25),
+        ]);
+
+        if (!isMounted) return;
+
+        const firstError = results.find((result) => result?.error)?.error;
+
+        if (firstError) {
+          console.error("CargoDesk warehouse workspace load failed:", firstError);
+          setWarehouseData({
+            warehouses: [],
+            stuffing: [],
+            weighbridge: [],
+            vgm: [],
+            error: firstError.message || "Unable to load warehouse activity.",
+            unavailable: false,
+          });
+          return;
+        }
+
+        setWarehouseData({
+          warehouses: results[0]?.data ?? [],
+          stuffing: results[1]?.data ?? [],
+          weighbridge: results[2]?.data ?? [],
+          vgm: results[3]?.data ?? [],
+          error: "",
+          unavailable: false,
+        });
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("CargoDesk warehouse workspace load failed:", error);
+        setWarehouseData({
+          warehouses: [],
+          stuffing: [],
+          weighbridge: [],
+          vgm: [],
+          error: error.message || "Unable to load warehouse activity.",
+          unavailable: false,
+        });
+      } finally {
+        if (isMounted) setWarehouseLoading(false);
+      }
+    };
+
+    loadWarehouseWorkspace();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activePage, session, authorizationLoading, role, hasPermission]);
 
   const handleNavigation = (item) => {
     if (authorizationLoading || !role || allowedNavigation[item] !== true) {
@@ -1219,6 +1355,190 @@ function App() {
                   auditability.
                 </p>
               </section>
+            </>
+          ) : isWarehouse ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleNavigation("Dashboard")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor:
+                      allowedNavigation.Dashboard === true
+                        ? "pointer"
+                        : "not-allowed",
+                    color: "#1f5f95",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginBottom: "20px",
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#627d98",
+                      marginBottom: "7px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.6px",
+                    }}
+                  >
+                    Operations
+                  </div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>
+                    Warehouse
+                  </h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>
+                    Review authorized warehouse, stuffing, weighbridge, and VGM activity through existing read paths.
+                  </p>
+                </div>
+
+                {warehouseLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    Loading warehouse activity...
+                  </div>
+                ) : warehouseData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>
+                    Warehouse activity is not available for this role.
+                  </div>
+                ) : warehouseData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>
+                    Unable to load warehouse activity: {warehouseData.error}
+                  </div>
+                ) : (
+                  <>
+                    {[
+                      ["Warehouse master records", warehouseData.warehouses.length],
+                      ["Stuffing records", warehouseData.stuffing.length],
+                      ["Weighbridge records", warehouseData.weighbridge.length],
+                      ["Container VGM records", warehouseData.vgm.length],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        style={{
+                          display: "inline-flex",
+                          flexDirection: "column",
+                          minWidth: "190px",
+                          margin: "0 12px 14px 0",
+                          padding: "15px 17px",
+                          background: "#ffffff",
+                          border: "1px solid #e5e9f0",
+                          borderRadius: "10px",
+                        }}
+                      >
+                        <span style={{ fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                          {label}
+                        </span>
+                        <span style={{ marginTop: "6px", fontSize: "24px", fontWeight: "700", color: "#173b6c" }}>
+                          {value}
+                        </span>
+                      </div>
+                    ))}
+
+                    <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", marginTop: "4px", marginBottom: "18px", overflowX: "auto" }}>
+                      <h2 style={{ margin: "0 0 14px", fontSize: "18px", color: "#173b6c" }}>
+                        Warehouse master records
+                      </h2>
+                      {warehouseData.warehouses.length === 0 ? (
+                        <div style={{ color: "#627d98", fontSize: "13px" }}>No warehouse master records are available through the authorized read path.</div>
+                      ) : (
+                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                          <thead>
+                            <tr style={{ borderBottom: "1px solid #d9e2ec" }}>
+                              {["Code", "Name", "Party ID", "Location", "Capacity MT", "Active"].map((heading) => (
+                                <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {warehouseData.warehouses.map((item) => (
+                              <tr key={item.warehouse_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.warehouse_code || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#334e68" }}>{item.warehouse_name || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.party_id ?? "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{[item.city, item.state_region].filter(Boolean).join(", ") || "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.capacity_mt ?? "—"}</td>
+                                <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.is_active == null ? "—" : item.is_active ? "Yes" : "No"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </section>
+
+                    <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", marginBottom: "18px", overflowX: "auto" }}>
+                      <h2 style={{ margin: "0 0 14px", fontSize: "18px", color: "#173b6c" }}>Stuffing activity</h2>
+                      {warehouseData.stuffing.length === 0 ? (
+                        <div style={{ color: "#627d98", fontSize: "13px" }}>No stuffing records are available.</div>
+                      ) : (
+                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1100px" }}>
+                          <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Reference", "Shipment", "Container", "Status ID", "Warehouse", "Planned", "Actual End", "Seal"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead>
+                          <tbody>{warehouseData.stuffing.map((item) => <tr key={item.stuffing_record_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.stuffing_reference || "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.stuffing_status_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.warehouse_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_stuffing_date ? new Date(item.planned_stuffing_date).toLocaleString() : "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_end_time ? new Date(item.actual_end_time).toLocaleString() : "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.seal_number || "—"}</td>
+                          </tr>)}</tbody>
+                        </table>
+                      )}
+                    </section>
+
+                    <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", marginBottom: "18px", overflowX: "auto" }}>
+                      <h2 style={{ margin: "0 0 14px", fontSize: "18px", color: "#173b6c" }}>Weighbridge activity</h2>
+                      {warehouseData.weighbridge.length === 0 ? (
+                        <div style={{ color: "#627d98", fontSize: "13px" }}>No weighbridge records are available.</div>
+                      ) : (
+                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1150px" }}>
+                          <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Reference", "Shipment", "Container", "Ticket", "Gross", "Tare", "Net", "Verification ID", "Date"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead>
+                          <tbody>{warehouseData.weighbridge.map((item) => <tr key={item.weighbridge_record_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.weighing_reference || "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.weighbridge_ticket_number || "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.gross_weight ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.tare_weight ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.net_weight ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.verification_status_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.weighing_date ? new Date(item.weighing_date).toLocaleString() : "—"}</td>
+                          </tr>)}</tbody>
+                        </table>
+                      )}
+                    </section>
+
+                    <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", marginBottom: "18px", overflowX: "auto" }}>
+                      <h2 style={{ margin: "0 0 14px", fontSize: "18px", color: "#173b6c" }}>Container VGM activity</h2>
+                      {warehouseData.vgm.length === 0 ? (
+                        <div style={{ color: "#627d98", fontSize: "13px" }}>No container VGM records are available.</div>
+                      ) : (
+                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1150px" }}>
+                          <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Reference", "Shipment", "Container", "VGM", "Method", "Verification ID", "Weighing Date", "Submitted"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead>
+                          <tbody>{warehouseData.vgm.map((item) => <tr key={item.container_vgm_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.vgm_reference || "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.vgm_weight ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.weighing_method || "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.verification_status_id ?? "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.weighing_date ? new Date(item.weighing_date).toLocaleString() : "—"}</td>
+                            <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.submitted_to_carrier_at ? new Date(item.submitted_to_carrier_at).toLocaleString() : "—"}</td>
+                          </tr>)}</tbody>
+                        </table>
+                      )}
+                    </section>
+                  </>
+                )}
+              </div>
             </>
           ) : (
             <>
