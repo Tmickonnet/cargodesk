@@ -148,6 +148,14 @@ function App() {
     unavailable: false,
   });
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [documentationData, setDocumentationData] = useState({
+    items: [],
+    error: "",
+    unavailable: false,
+    typeNames: {},
+    statusNames: {},
+  });
+  const [documentationLoading, setDocumentationLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -807,6 +815,7 @@ function App() {
   };
 
   const isDashboard = activePage === "Dashboard";
+  const isDocumentation = activePage === "Documentation";
   const isShipping = activePage === "Shipping";
   const isContainers = activePage === "Containers";
   const isDelivery = activePage === "Delivery";
@@ -845,6 +854,135 @@ function App() {
   ];
 
 
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDocumentation = async () => {
+      if (
+        activePage !== "Documentation" ||
+        !session ||
+        authorizationLoading ||
+        !role
+      ) {
+        return;
+      }
+
+      const documentView = await hasPermission("DOCUMENT_VIEW");
+
+      if (!isMounted) return;
+
+      if (!documentView) {
+        setDocumentationData({
+          items: [],
+          error: "",
+          unavailable: true,
+          typeNames: {},
+          statusNames: {},
+        });
+        setDocumentationLoading(false);
+        return;
+      }
+
+      setDocumentationLoading(true);
+      setDocumentationData({
+        items: [],
+        error: "",
+        unavailable: false,
+        typeNames: {},
+        statusNames: {},
+      });
+
+      try {
+        const [documentsResult, linksResult, typesResult] =
+          await Promise.all([
+            supabase
+              .from("documents")
+              .select(
+                "document_id, document_type_id, document_number, document_title, file_name, file_extension, mime_type, file_size_bytes, version_number, is_current_version, document_status_id, uploaded_by, uploaded_at, expiry_date, description, created_at, updated_at"
+              )
+              .eq("is_current_version", true)
+              .order("updated_at", { ascending: false, nullsFirst: false })
+              .limit(50),
+            supabase
+              .from("shipment_documents")
+              .select("shipment_document_id, shipment_id, document_id, is_primary, remarks")
+              .limit(100),
+            supabase
+              .from("document_types")
+              .select("document_type_id, type_code, type_name")
+              .eq("is_active", true),
+          ]);
+
+        if (!isMounted) return;
+
+        const firstError =
+          documentsResult.error ||
+          linksResult.error ||
+          typesResult.error;
+
+        if (firstError) {
+          console.error("CargoDesk documentation workspace load failed:", firstError);
+          setDocumentationData({
+            items: [],
+            error:
+              firstError.message ||
+              "Unable to load documentation activity.",
+            unavailable: false,
+            typeNames: {},
+            statusNames: {},
+          });
+          return;
+        }
+
+        const typeNames = Object.fromEntries(
+          (typesResult.data ?? []).map((item) => [
+            item.document_type_id,
+            item.type_name || item.type_code || "Unknown",
+          ])
+        );
+
+        const shipmentByDocument = {};
+        for (const link of linksResult.data ?? []) {
+          if (!shipmentByDocument[link.document_id]) {
+            shipmentByDocument[link.document_id] = [];
+          }
+          shipmentByDocument[link.document_id].push(link);
+        }
+
+        const items = (documentsResult.data ?? []).map((document) => ({
+          ...document,
+          shipmentLinks: shipmentByDocument[document.document_id] ?? [],
+        }));
+
+        setDocumentationData({
+          items,
+          error: "",
+          unavailable: false,
+          typeNames,
+          statusNames: {},
+        });
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("CargoDesk documentation workspace load failed:", error);
+        setDocumentationData({
+          items: [],
+          error: error.message || "Unable to load documentation activity.",
+          unavailable: false,
+          typeNames: {},
+          statusNames: {},
+        });
+      } finally {
+        if (isMounted) setDocumentationLoading(false);
+      }
+    };
+
+    loadDocumentation();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activePage, session, authorizationLoading, role, hasPermission]);
 
   const handleNavigation = (item) => {
     if (authorizationLoading || !role) {
@@ -1859,6 +1997,103 @@ function App() {
                   auditability.
                 </p>
               </section>
+            </>
+          ) : isDocumentation ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleNavigation("Dashboard")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed",
+                    color: "#1f5f95",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginBottom: "20px",
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                    Operations
+                  </div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>
+                    Documentation
+                  </h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>
+                    Review current shipment-linked documentation through the existing authorized read path.
+                  </p>
+                </div>
+
+                {documentationLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    Loading documentation activity...
+                  </div>
+                ) : documentationData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>
+                    Documentation activity is not available for this role.
+                  </div>
+                ) : documentationData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>
+                    Unable to load documentation activity: {documentationData.error}
+                  </div>
+                ) : documentationData.items.length === 0 ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    No current documentation records are available through the current read path.
+                  </div>
+                ) : (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(16,42,67,0.04)", overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1180px" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #d9e2ec" }}>
+                          {["Document", "Type", "Status", "Shipment IDs", "Version", "Uploaded", "Expiry", "File"].map((heading) => (
+                            <th key={heading} style={{ padding: "10px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              {heading}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {documentationData.items.map((item) => (
+                          <tr key={item.document_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                            <td style={{ padding: "11px 8px", fontSize: "13px", fontWeight: "700", color: "#1f5f95" }}>
+                              {item.document_number || item.document_title || `Document ${item.document_id}`}
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
+                              {documentationData.typeNames[item.document_type_id] || "—"}
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
+                              {item.document_status_id ?? "—"}
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
+                              {item.shipmentLinks.length
+                                ? item.shipmentLinks.map((link) => link.shipment_id).join(", ")
+                                : "—"}
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
+                              {item.version_number ?? "—"}{item.is_current_version ? " (current)" : ""}
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
+                              {item.uploaded_at ? new Date(item.uploaded_at).toLocaleString() : "—"}
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
+                              {item.expiry_date || "—"}
+                            </td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
+                              {item.file_name || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </>
           ) : isShipping ? (
             <>
