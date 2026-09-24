@@ -136,6 +136,12 @@ function App() {
     unavailable: false,
   });
   const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [containerData, setContainerData] = useState({
+    items: [],
+    error: "",
+    unavailable: false,
+  });
+  const [containerLoading, setContainerLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -582,6 +588,106 @@ function App() {
     };
   }, [activePage, session, authorizationLoading, role, hasPermission]);
 
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadContainers = async () => {
+      if (
+        activePage !== "Containers" ||
+        !session ||
+        authorizationLoading ||
+        !role
+      ) {
+        return;
+      }
+
+      const cargoView = await hasPermission("CARGO_VIEW");
+
+      if (!isMounted) return;
+
+      if (!cargoView) {
+        setContainerData({ items: [], error: "", unavailable: true });
+        setContainerLoading(false);
+        return;
+      }
+
+      setContainerLoading(true);
+      setContainerData({ items: [], error: "", unavailable: false });
+
+      const { data: assignments, error: assignmentError } = await supabase
+        .from("shipment_container")
+        .select(
+          "shipment_container_id, shipment_id, container_id, booking_id, container_sequence, container_status, planned_stuffing_date, actual_stuffing_date, gate_in_date, gate_out_date"
+        )
+        .order("shipment_id", { ascending: true })
+        .order("container_sequence", { ascending: true })
+        .limit(25);
+
+      if (!isMounted) return;
+
+      if (assignmentError) {
+        console.error("CargoDesk container workspace load failed:", assignmentError);
+        setContainerData({
+          items: [],
+          error: assignmentError.message || "Unable to load container activity.",
+          unavailable: false,
+        });
+        setContainerLoading(false);
+        return;
+      }
+
+      const containerIds = [...new Set((assignments ?? []).map((item) => item.container_id).filter(Boolean))];
+      let containersById = {};
+
+      if (containerIds.length > 0) {
+        const { data: containers, error: containerError } = await supabase
+          .from("containers")
+          .select("container_id, container_number, container_status")
+          .in("container_id", containerIds);
+
+        if (!isMounted) return;
+
+        if (containerError) {
+          console.error("CargoDesk container reference load failed:", containerError);
+          setContainerData({
+            items: [],
+            error: containerError.message || "Unable to load container references.",
+            unavailable: false,
+          });
+          setContainerLoading(false);
+          return;
+        }
+
+        containersById = Object.fromEntries(
+          (containers ?? []).map((container) => [
+            container.container_id,
+            container,
+          ])
+        );
+      }
+
+      setContainerData({
+        items: (assignments ?? []).map((item) => ({
+          ...item,
+          container_number: containersById[item.container_id]?.container_number || "",
+          master_container_status:
+            containersById[item.container_id]?.container_status || "",
+        })),
+        error: "",
+        unavailable: false,
+      });
+
+      setContainerLoading(false);
+    };
+
+    loadContainers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activePage, session, authorizationLoading, role, hasPermission]);
+
   useEffect(() => {
     if (!session || authorizationLoading || !role) {
       return;
@@ -633,6 +739,7 @@ function App() {
   };
 
   const isDashboard = activePage === "Dashboard";
+  const isContainers = activePage === "Containers";
   const isDelivery = activePage === "Delivery";
   const isTracking = activePage === "Tracking";
   const isExceptions = activePage === "Exceptions";
@@ -1683,6 +1790,85 @@ function App() {
                   auditability.
                 </p>
               </section>
+            </>
+          ) : isContainers ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleNavigation("Dashboard")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "#1f5f95",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginBottom: "20px",
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                    Operations
+                  </div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>
+                    Container Activity
+                  </h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>
+                    Review container allocation and movement activity through the existing authorized read path.
+                  </p>
+                </div>
+
+                {containerLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    Loading container activity...
+                  </div>
+                ) : containerData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>
+                    Container activity is not available for this role.
+                  </div>
+                ) : containerData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>
+                    Unable to load container activity: {containerData.error}
+                  </div>
+                ) : containerData.items.length === 0 ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    No container activity is available through the current read path.
+                  </div>
+                ) : (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(16,42,67,0.04)", overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1040px" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #d9e2ec" }}>
+                          {["Container", "Shipment ID", "Sequence", "Status", "Planned Stuffing", "Actual Stuffing", "Gate In", "Gate Out"].map((heading) => (
+                            <th key={heading} style={{ padding: "10px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              {heading}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {containerData.items.map((item) => (
+                          <tr key={item.shipment_container_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                            <td style={{ padding: "11px 8px", fontSize: "13px", fontWeight: "700", color: "#1f5f95" }}>{item.container_number || item.container_id || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_sequence ?? "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_status || item.master_container_status || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_stuffing_date || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_stuffing_date || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.gate_in_date ? new Date(item.gate_in_date).toLocaleString() : "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.gate_out_date ? new Date(item.gate_out_date).toLocaleString() : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </>
           ) : isDelivery ? (
             <>
