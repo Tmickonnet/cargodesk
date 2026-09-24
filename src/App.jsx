@@ -13,6 +13,7 @@ const navigationGroups = [
       "Warehouse",
       "Shipping",
       "Delivery",
+      "Exceptions",
     ],
   },
   {
@@ -29,6 +30,7 @@ const navigationPermissions = {
   Warehouse: "OPERATIONS_VIEW",
   Shipping: "BOOKING_VIEW",
   Delivery: "DELIVERY_VIEW",
+  Exceptions: "EXCEPTION_VIEW",
   Reports: "OPERATIONS_VIEW",
   "Audit Log": "AUDIT_VIEW",
   Settings: "SYSTEM_CONFIG",
@@ -47,6 +49,8 @@ const moduleDescriptions = {
     "Manage shipping-line activities, vessel information, bookings, bills of lading, and sailing status.",
   Delivery:
     "Monitor delivery planning, transportation coordination, proof of delivery, and completion status.",
+  Exceptions:
+    "Review currently unresolved operational exceptions through the existing read-only exception path.",
   Reports:
     "Access operational reports, shipment performance information, documentation status, and logistics analysis.",
   "Audit Log":
@@ -110,6 +114,12 @@ function App() {
   });
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState("");
+  const [exceptionData, setExceptionData] = useState({
+    items: [],
+    error: "",
+    unavailable: false,
+  });
+  const [exceptionLoading, setExceptionLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -368,6 +378,68 @@ function App() {
   }, [session, authorizationLoading, role, allowedNavigation, hasPermission]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const loadExceptions = async () => {
+      if (
+        activePage !== "Exceptions" ||
+        !session ||
+        authorizationLoading ||
+        !role
+      ) {
+        return;
+      }
+
+      const exceptionView = await hasPermission("EXCEPTION_VIEW");
+
+      if (!isMounted) return;
+
+      if (!exceptionView) {
+        setExceptionData({ items: [], error: "", unavailable: true });
+        setExceptionLoading(false);
+        return;
+      }
+
+      setExceptionLoading(true);
+      setExceptionData({ items: [], error: "", unavailable: false });
+
+      const { data, error } = await supabase
+        .from("shipment_exception")
+        .select(
+          "shipment_exception_id, shipment_id, exception_reference, exception_type, severity, reported_at, resolved_at, status"
+        )
+        .is("resolved_at", null)
+        .order("reported_at", { ascending: false })
+        .limit(25);
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("CargoDesk exception workspace load failed:", error);
+        setExceptionData({
+          items: [],
+          error: error.message || "Unable to load exceptions.",
+          unavailable: false,
+        });
+      } else {
+        setExceptionData({
+          items: data ?? [],
+          error: "",
+          unavailable: false,
+        });
+      }
+
+      setExceptionLoading(false);
+    };
+
+    loadExceptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activePage, session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
     if (!session || authorizationLoading || !role) {
       return;
     }
@@ -418,6 +490,7 @@ function App() {
   };
 
   const isDashboard = activePage === "Dashboard";
+  const isExceptions = activePage === "Exceptions";
 
   const dashboardCards = [
     {
@@ -1465,6 +1538,83 @@ function App() {
                   auditability.
                 </p>
               </section>
+            </>
+          ) : isExceptions ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleNavigation("Dashboard")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed",
+                    color: "#1f5f95",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginBottom: "20px",
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                    Operations
+                  </div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>
+                    Exceptions
+                  </h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>
+                    Review currently unresolved operational exceptions through the existing authorized read path.
+                  </p>
+                </div>
+
+                {exceptionLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    Loading unresolved exceptions...
+                  </div>
+                ) : exceptionData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>
+                    Exception activity is not available for this role.
+                  </div>
+                ) : exceptionData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>
+                    Unable to load unresolved exceptions: {exceptionData.error}
+                  </div>
+                ) : exceptionData.items.length === 0 ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    No unresolved exceptions are available through the current read path.
+                  </div>
+                ) : (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(16,42,67,0.04)", overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "760px" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #d9e2ec" }}>
+                          {["Reference", "Shipment ID", "Type", "Severity", "Reported", "Status"].map((heading) => (
+                            <th key={heading} style={{ padding: "10px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              {heading}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {exceptionData.items.map((item) => (
+                          <tr key={item.shipment_exception_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                            <td style={{ padding: "11px 8px", fontSize: "13px", fontWeight: "700", color: "#1f5f95" }}>{item.exception_reference || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.exception_type || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.severity || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.reported_at ? new Date(item.reported_at).toLocaleString() : "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <>
