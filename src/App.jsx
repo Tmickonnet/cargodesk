@@ -1386,9 +1386,7 @@ function App() {
                         {dashboardData.recentShipments.map((shipment) => (
                           <tr key={shipment.shipment_id} style={{ borderBottom: "1px solid #eef2f7" }}>
                             <td style={{ padding: "11px 8px", fontSize: "13px", fontWeight: "700", color: "#1f5f95" }}>
-                              <button type="button" onClick={() => handleNavigation("Shipments")} style={{ border: 0, padding: 0, background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", cursor: allowedNavigation.Shipments === true ? "pointer" : "default" }}>
-                                {shipment.shipment_number}
-                              </button>
+                              {shipment.shipment_number}
                             </td>
                             <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>
                               {dashboardData.statusNames[shipment.shipment_status_id] || "Status unavailable"}
