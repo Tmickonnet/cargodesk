@@ -912,11 +912,6 @@ function App() {
               .from("document_types")
               .select("document_type_id, type_code, type_name")
               .eq("is_active", true),
-            supabase
-              .from("document_statuses")
-              .select("document_status_id, status_code, status_name")
-              .eq("is_active", true)
-              .order("sort_order", { ascending: true }),
           ]);
 
         if (!isMounted) return;
@@ -924,8 +919,7 @@ function App() {
         const firstError =
           documentsResult.error ||
           linksResult.error ||
-          typesResult.error ||
-          statusesResult.error;
+          typesResult.error;
 
         if (firstError) {
           console.error("CargoDesk documentation workspace load failed:", firstError);
@@ -948,13 +942,6 @@ function App() {
           ])
         );
 
-        const statusNames = Object.fromEntries(
-          (statusesResult.data ?? []).map((item) => [
-            item.document_status_id,
-            item.status_name || item.status_code || "Unknown",
-          ])
-        );
-
         const shipmentByDocument = {};
         for (const link of linksResult.data ?? []) {
           if (!shipmentByDocument[link.document_id]) {
@@ -973,7 +960,7 @@ function App() {
           error: "",
           unavailable: false,
           typeNames,
-          statusNames,
+          statusNames: {},
         });
       } catch (error) {
         if (!isMounted) return;
