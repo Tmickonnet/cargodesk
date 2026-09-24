@@ -100,6 +100,8 @@ function App() {
     unavailable: false,
   });
   const [warehouseLoading, setWarehouseLoading] = useState(false);
+  const [reportsData, setReportsData] = useState({ shipments: 0, bookings: 0, containers: 0, trackingEvents: 0, unresolvedExceptions: 0, deliveries: 0, documents: 0, error: "", unavailable: false });
+  const [reportsLoading, setReportsLoading] = useState(false);
 
   const {
     role,
@@ -295,6 +297,7 @@ function App() {
 
   const isDashboard = activePage === "Dashboard";
   const isWarehouse = activePage === "Warehouse";
+  const isReports = activePage === "Reports";
 
 
   useEffect(() => {
@@ -422,6 +425,38 @@ function App() {
     };
   }, [activePage, session, authorizationLoading, role, hasPermission]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadReportsWorkspace = async () => {
+      if (activePage !== "Reports" || !session || authorizationLoading || !role) return;
+      const permitted = await hasPermission("OPERATIONS_VIEW");
+      if (!isMounted) return;
+      if (!permitted) { setReportsData((current) => ({ ...current, unavailable: true, error: "" })); setReportsLoading(false); return; }
+      setReportsLoading(true);
+      try {
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const results = await Promise.all([
+          supabase.from("shipments").select("shipment_id", { count: "exact", head: true }),
+          supabase.from("bookings").select("booking_id", { count: "exact", head: true }),
+          supabase.from("shipment_container").select("shipment_container_id", { count: "exact", head: true }),
+          supabase.from("tracking_event").select("tracking_event_id", { count: "exact", head: true }).gte("event_datetime", since),
+          supabase.from("shipment_exception").select("shipment_exception_id", { count: "exact", head: true }).is("resolved_at", null),
+          supabase.from("delivery").select("delivery_id", { count: "exact", head: true }),
+          supabase.from("documents").select("document_id", { count: "exact", head: true }),
+        ]);
+        if (!isMounted) return;
+        const firstError = results.find((result) => result?.error)?.error;
+        if (firstError) { setReportsData((current) => ({ ...current, error: firstError.message || "Unable to load operational report data.", unavailable: false })); return; }
+        setReportsData({ shipments: results[0].count ?? 0, bookings: results[1].count ?? 0, containers: results[2].count ?? 0, trackingEvents: results[3].count ?? 0, unresolvedExceptions: results[4].count ?? 0, deliveries: results[5].count ?? 0, documents: results[6].count ?? 0, error: "", unavailable: false });
+      } catch (error) {
+        if (isMounted) setReportsData((current) => ({ ...current, error: error.message || "Unable to load operational report data.", unavailable: false }));
+      } finally {
+        if (isMounted) setReportsLoading(false);
+      }
+    };
+    loadReportsWorkspace();
+    return () => { isMounted = false; };
+  }, [activePage, session, authorizationLoading, role, hasPermission]);
   const handleNavigation = (item) => {
     if (authorizationLoading || !role || allowedNavigation[item] !== true) {
       return;
@@ -1356,7 +1391,38 @@ function App() {
                 </p>
               </section>
             </>
-          ) : isWarehouse ? (
+          ) : isReports ? (
+            <div style={{ marginBottom: "22px" }}>
+              <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>
+                ← Back to Dashboard
+              </button>
+              <div style={{ marginBottom: "20px" }}>
+                <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Management</div>
+                <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Reports</h1>
+                <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px", lineHeight: 1.6 }}>Read-only operational record volumes derived from existing authorized logistics data.</p>
+              </div>
+              {reportsLoading ? (
+                <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading operational report data...</div>
+              ) : reportsData.unavailable ? (
+                <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Operational reports are not available for this role.</div>
+              ) : reportsData.error ? (
+                <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Unable to load operational report data: {reportsData.error}</div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", marginBottom: "18px" }}>
+                    {[["Shipments", reportsData.shipments], ["Bookings", reportsData.bookings], ["Container assignments", reportsData.containers], ["Deliveries", reportsData.deliveries], ["Documents", reportsData.documents], ["Unresolved exceptions", reportsData.unresolvedExceptions]].map(([label, value]) => (
+                      <div key={label} style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "10px", padding: "17px" }}><div style={{ fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div><div style={{ marginTop: "7px", fontSize: "27px", fontWeight: "700", color: "#173b6c" }}>{value}</div></div>
+                    ))}
+                  </div>
+                  <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: "700", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "8px" }}>Tracking activity</div>
+                    <h2 style={{ margin: "0 0 8px", fontSize: "19px", color: "#173b6c" }}>Recent tracking events</h2>
+                    <p style={{ margin: 0, color: "#627d98", fontSize: "13px", lineHeight: 1.6 }}>{reportsData.trackingEvents} tracking events recorded in the last 30 days through the authorized read path.</p>
+                    <div style={{ marginTop: "16px", padding: "12px 14px", background: "#f5f7fb", border: "1px solid #e5e9f0", borderRadius: "8px", color: "#627d98", fontSize: "12px", lineHeight: 1.6 }}>These figures are descriptive record counts. They do not infer shipment performance, compliance, commercial authority, or completion status.</div>
+                  </section>
+                </>
+              )}
+            </div>          ) : isWarehouse ? (
             <>
               <div style={{ marginBottom: "22px" }}>
                 <button
