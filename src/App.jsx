@@ -13,6 +13,7 @@ const navigationGroups = [
       "Warehouse",
       "Shipping",
       "Delivery",
+      "Tracking",
       "Exceptions",
     ],
   },
@@ -30,6 +31,7 @@ const navigationPermissions = {
   Warehouse: "OPERATIONS_VIEW",
   Shipping: "BOOKING_VIEW",
   Delivery: "DELIVERY_VIEW",
+  Tracking: "TRACKING_VIEW",
   Exceptions: "EXCEPTION_VIEW",
   Reports: "OPERATIONS_VIEW",
   "Audit Log": "AUDIT_VIEW",
@@ -49,6 +51,8 @@ const moduleDescriptions = {
     "Manage shipping-line activities, vessel information, bookings, bills of lading, and sailing status.",
   Delivery:
     "Monitor delivery planning, transportation coordination, proof of delivery, and completion status.",
+  Tracking:
+    "Review recent shipment tracking activity through the existing read-only tracking path.",
   Exceptions:
     "Review currently unresolved operational exceptions through the existing read-only exception path.",
   Reports:
@@ -120,6 +124,12 @@ function App() {
     unavailable: false,
   });
   const [exceptionLoading, setExceptionLoading] = useState(false);
+  const [trackingData, setTrackingData] = useState({
+    items: [],
+    error: "",
+    unavailable: false,
+  });
+  const [trackingLoading, setTrackingLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -440,6 +450,72 @@ function App() {
   }, [activePage, session, authorizationLoading, role, hasPermission]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const loadTracking = async () => {
+      if (
+        activePage !== "Tracking" ||
+        !session ||
+        authorizationLoading ||
+        !role
+      ) {
+        return;
+      }
+
+      const trackingView = await hasPermission("TRACKING_VIEW");
+
+      if (!isMounted) return;
+
+      if (!trackingView) {
+        setTrackingData({ items: [], error: "", unavailable: true });
+        setTrackingLoading(false);
+        return;
+      }
+
+      setTrackingLoading(true);
+      setTrackingData({ items: [], error: "", unavailable: false });
+
+      const since = new Date(
+        Date.now() - 30 * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      const { data, error } = await supabase
+        .from("tracking_event")
+        .select(
+          "tracking_event_id, shipment_id, shipment_leg_id, event_reference, event_datetime, estimated_datetime, actual_datetime, status_text, source_system"
+        )
+        .gte("event_datetime", since)
+        .order("event_datetime", { ascending: false })
+        .limit(25);
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("CargoDesk tracking workspace load failed:", error);
+        setTrackingData({
+          items: [],
+          error: error.message || "Unable to load tracking activity.",
+          unavailable: false,
+        });
+      } else {
+        setTrackingData({
+          items: data ?? [],
+          error: "",
+          unavailable: false,
+        });
+      }
+
+      setTrackingLoading(false);
+    };
+
+    loadTracking();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activePage, session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
     if (!session || authorizationLoading || !role) {
       return;
     }
@@ -490,6 +566,7 @@ function App() {
   };
 
   const isDashboard = activePage === "Dashboard";
+  const isTracking = activePage === "Tracking";
   const isExceptions = activePage === "Exceptions";
 
   const dashboardCards = [
@@ -1538,6 +1615,84 @@ function App() {
                   auditability.
                 </p>
               </section>
+            </>
+          ) : isTracking ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleNavigation("Dashboard")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "#1f5f95",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    marginBottom: "20px",
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                    Operations
+                  </div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>
+                    Tracking Activity
+                  </h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>
+                    Review recent shipment tracking activity through the existing authorized read path.
+                  </p>
+                </div>
+
+                {trackingLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    Loading recent tracking activity...
+                  </div>
+                ) : trackingData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>
+                    Tracking activity is not available for this role.
+                  </div>
+                ) : trackingData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>
+                    Unable to load recent tracking activity: {trackingData.error}
+                  </div>
+                ) : trackingData.items.length === 0 ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    No recent tracking activity is available through the current read path.
+                  </div>
+                ) : (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(16,42,67,0.04)", overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #d9e2ec" }}>
+                          {["Event", "Shipment ID", "Leg ID", "Event Time", "Actual Time", "Status", "Source"].map((heading) => (
+                            <th key={heading} style={{ padding: "10px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              {heading}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trackingData.items.map((item) => (
+                          <tr key={item.tracking_event_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                            <td style={{ padding: "11px 8px", fontSize: "13px", fontWeight: "700", color: "#1f5f95" }}>{item.event_reference || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_leg_id ?? "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.event_datetime ? new Date(item.event_datetime).toLocaleString() : "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_datetime ? new Date(item.actual_datetime).toLocaleString() : "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.status_text || "—"}</td>
+                            <td style={{ padding: "11px 8px", fontSize: "12px", color: "#627d98" }}>{item.source_system || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </>
           ) : isExceptions ? (
             <>
