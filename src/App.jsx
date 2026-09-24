@@ -57,24 +57,24 @@ const moduleDescriptions = {
 
 const dashboardCards = [
   {
+    key: "activeShipments",
     title: "Active Shipments",
-    value: "0",
-    description: "Shipments currently being monitored",
+    description: "Shipments currently in an operational lifecycle",
   },
   {
+    key: "pendingDocuments",
     title: "Pending Documents",
-    value: "0",
-    description: "Documents requiring attention",
+    description: "Documents not yet in a final lifecycle state",
   },
   {
+    key: "containersInTransit",
     title: "Containers in Transit",
-    value: "0",
-    description: "Containers currently moving",
+    description: "Not available: controlled container transit status is not established",
   },
   {
+    key: "pendingDeliveries",
     title: "Pending Deliveries",
-    value: "0",
-    description: "Deliveries awaiting completion",
+    description: "Deliveries not yet delivered or cancelled",
   },
 ];
 
@@ -102,6 +102,15 @@ function App() {
   const [warehouseLoading, setWarehouseLoading] = useState(false);
   const [reportsData, setReportsData] = useState({ shipments: 0, bookings: 0, containers: 0, trackingEvents: 0, unresolvedExceptions: 0, deliveries: 0, documents: 0, error: "", unavailable: false });
   const [reportsLoading, setReportsLoading] = useState(false);
+  const [dashboardData, setDashboardData] = useState({
+    activeShipments: null,
+    pendingDocuments: null,
+    containersInTransit: null,
+    pendingDeliveries: null,
+    error: "",
+    unavailable: false,
+  });
+  const [dashboardLoading, setDashboardLoading] = useState(false);
 
   const {
     role,
@@ -424,6 +433,102 @@ function App() {
       isMounted = false;
     };
   }, [activePage, session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboardSnapshot = async () => {
+      if (!isDashboard || !session || authorizationLoading || !role) return;
+
+      const permitted = await hasPermission("OPERATIONS_VIEW");
+      if (!isMounted) return;
+
+      if (!permitted) {
+        setDashboardData((current) => ({ ...current, unavailable: true, error: "" }));
+        setDashboardLoading(false);
+        return;
+      }
+
+      setDashboardLoading(true);
+      setDashboardData({
+        activeShipments: null,
+        pendingDocuments: null,
+        containersInTransit: null,
+        pendingDeliveries: null,
+        error: "",
+        unavailable: false,
+      });
+
+      try {
+        const [shipments, documents, deliveries] = await Promise.all([
+          supabase
+            .from("shipments")
+            .select("shipment_id, shipment_status_id")
+            .not("shipment_status_id", "is", null)
+            .limit(1000),
+          supabase
+            .from("documents")
+            .select("document_id, document_status_id")
+            .not("document_status_id", "is", null)
+            .limit(1000),
+          supabase
+            .from("delivery")
+            .select("delivery_id, delivery_status_id")
+            .not("delivery_status_id", "is", null)
+            .limit(1000),
+        ]);
+
+        if (!isMounted) return;
+
+        const firstError = [shipments, documents, deliveries].find((result) => result?.error)?.error;
+        if (firstError) {
+          setDashboardData((current) => ({
+            ...current,
+            error: firstError.message || "Unable to load dashboard activity.",
+            unavailable: false,
+          }));
+          return;
+        }
+
+        const activeShipmentStatusIds = new Set(
+          [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(Number)
+        );
+        const pendingDocumentStatusIds = new Set([1, 2, 3, 4].map(Number));
+        const pendingDeliveryStatusIds = new Set([1, 2, 3, 4, 6, 7].map(Number));
+
+        setDashboardData({
+          activeShipments: (shipments.data ?? []).filter((item) =>
+            activeShipmentStatusIds.has(Number(item.shipment_status_id))
+          ).length,
+          pendingDocuments: (documents.data ?? []).filter((item) =>
+            pendingDocumentStatusIds.has(Number(item.document_status_id))
+          ).length,
+          containersInTransit: null,
+          pendingDeliveries: (deliveries.data ?? []).filter((item) =>
+            pendingDeliveryStatusIds.has(Number(item.delivery_status_id))
+          ).length,
+          error: "",
+          unavailable: false,
+        });
+      } catch (error) {
+        if (isMounted) {
+          setDashboardData((current) => ({
+            ...current,
+            error: error.message || "Unable to load dashboard activity.",
+            unavailable: false,
+          }));
+        }
+      } finally {
+        if (isMounted) setDashboardLoading(false);
+      }
+    };
+
+    loadDashboardSnapshot();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isDashboard, session, authorizationLoading, role, hasPermission]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1327,7 +1432,11 @@ function App() {
                         marginBottom: "10px",
                       }}
                     >
-                      {card.value}
+                      {dashboardLoading
+                        ? "…"
+                        : card.key === "containersInTransit"
+                          ? "—"
+                          : dashboardData[card.key] ?? "—"}
                     </div>
 
                     <div
@@ -1341,6 +1450,23 @@ function App() {
                   </div>
                 ))}
               </div>
+
+              {dashboardData.error && (
+                <div
+                  style={{
+                    background: "#fff5f5",
+                    border: "1px solid #fed7d7",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    marginBottom: "18px",
+                    color: "#b83232",
+                    fontSize: "12px",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Unable to load dashboard activity: {dashboardData.error}
+                </div>
+              )}
 
               {/* Operations overview */}
               <section
