@@ -121,6 +121,8 @@ function App() {
   const [documentationLoading, setDocumentationLoading] = useState(false);
   const [containerData, setContainerData] = useState({ rows: [], error: "", unavailable: false });
   const [containerLoading, setContainerLoading] = useState(false);
+  const [deliveryData, setDeliveryData] = useState({ rows: [], error: "", unavailable: false });
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
 
   const {
     role,
@@ -322,6 +324,7 @@ function App() {
   const isAuditLog = activePage === "Audit Log";
   const isDocumentation = activePage === "Documentation";
   const isContainers = activePage === "Containers";
+  const isDelivery = activePage === "Delivery";
 
 
   useEffect(() => {
@@ -666,6 +669,79 @@ function App() {
     loadContainerWorkspace();
     return () => { isMounted = false; };
   }, [isContainers, session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadDeliveryWorkspace = async () => {
+      if (!isDelivery || !session || authorizationLoading || !role) return;
+
+      const permitted = await hasPermission("DELIVERY_VIEW");
+      if (!isMounted) return;
+
+      if (!permitted) {
+        setDeliveryData({ rows: [], error: "", unavailable: true });
+        setDeliveryLoading(false);
+        return;
+      }
+
+      setDeliveryLoading(true);
+      setDeliveryData({ rows: [], error: "", unavailable: false });
+
+      try {
+        const [deliveryResult, statusResult, podResult] = await Promise.all([
+          supabase
+            .from("delivery")
+            .select("delivery_id, shipment_id, delivery_reference, delivery_status_id, planned_delivery_date, dispatch_date, estimated_delivery_date, actual_delivery_date, vehicle_reference, received_by, remarks, updated_at")
+            .order("updated_at", { ascending: false, nullsFirst: false })
+            .limit(25),
+          supabase
+            .from("delivery_statuses")
+            .select("delivery_status_id, status_code, status_name, sort_order")
+            .order("sort_order", { ascending: true }),
+          supabase
+            .from("proof_of_delivery")
+            .select("proof_of_delivery_id, delivery_id, pod_reference, pod_date, received_by, receiver_role, signature_available, delivery_condition, shortage_quantity, verification_status_id, verified_by, verification_date, remarks")
+            .order("pod_date", { ascending: false, nullsFirst: false })
+            .limit(25),
+        ]);
+
+        if (!isMounted) return;
+
+        const firstError = [deliveryResult, statusResult, podResult].find((result) => result?.error)?.error;
+        if (firstError) {
+          console.error("CargoDesk Delivery workspace load failed:", firstError);
+          setDeliveryData({ rows: [], error: firstError.message || "Unable to load delivery activity.", unavailable: false });
+          return;
+        }
+
+        const statusById = new Map((statusResult.data ?? []).map((status) => [Number(status.delivery_status_id), status]));
+        const podByDelivery = new Map();
+        (podResult.data ?? []).forEach((pod) => {
+          if (!podByDelivery.has(Number(pod.delivery_id))) podByDelivery.set(Number(pod.delivery_id), pod);
+        });
+
+        setDeliveryData({
+          rows: (deliveryResult.data ?? []).map((delivery) => ({
+            ...delivery,
+            status: statusById.get(Number(delivery.delivery_status_id)) ?? null,
+            pod: podByDelivery.get(Number(delivery.delivery_id)) ?? null,
+          })),
+          error: "",
+          unavailable: false,
+        });
+      } catch (error) {
+        if (isMounted) {
+          console.error("CargoDesk Delivery workspace load failed:", error);
+          setDeliveryData({ rows: [], error: error.message || "Unable to load delivery activity.", unavailable: false });
+        }
+      } finally {
+        if (isMounted) setDeliveryLoading(false);
+      }
+    };
+
+    loadDeliveryWorkspace();
+    return () => { isMounted = false; };
+  }, [isDelivery, session, authorizationLoading, role, hasPermission]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1883,6 +1959,51 @@ function App() {
                             </tr>
                           ))}
                         </tbody>
+                      </table>
+                    )}
+                  </section>
+                )}
+              </div>
+            </>
+          ) : isDelivery ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>← Back to Dashboard</button>
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Operations</div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Delivery</h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px", lineHeight: 1.6 }}>Read-only delivery and proof-of-delivery visibility using the existing DELIVERY_VIEW authorization boundary.</p>
+                </div>
+                {deliveryLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading delivery activity...</div>
+                ) : deliveryData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Delivery activity is not available for this role.</div>
+                ) : deliveryData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>Unable to load delivery activity: {deliveryData.error}</div>
+                ) : (
+                  <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", marginBottom: "14px" }}>
+                      <h2 style={{ margin: 0, fontSize: "18px", color: "#173b6c" }}>Delivery records</h2>
+                      <span style={{ fontSize: "12px", color: "#627d98" }}>Showing up to 25 deliveries; status meanings are from the authorized lookup table.</span>
+                    </div>
+                    {deliveryData.rows.length === 0 ? (
+                      <div style={{ color: "#627d98", fontSize: "13px" }}>No delivery records are available through the authorized read path.</div>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1450px" }}>
+                        <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Delivery", "Shipment ID", "Status", "Planned", "Dispatch", "Estimated", "Actual", "Vehicle", "Received By", "POD", "POD Verification ID"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead>
+                        <tbody>{deliveryData.rows.map((item) => <tr key={item.delivery_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.delivery_reference || ("Delivery " + item.delivery_id)}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.status?.status_name || item.status?.status_code || item.delivery_status_id || "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_delivery_date ? new Date(item.planned_delivery_date).toLocaleString() : "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.dispatch_date ? new Date(item.dispatch_date).toLocaleString() : "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.estimated_delivery_date ? new Date(item.estimated_delivery_date).toLocaleString() : "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_delivery_date ? new Date(item.actual_delivery_date).toLocaleString() : "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.vehicle_reference || "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.received_by || "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.pod?.pod_reference || "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.pod?.verification_status_id ?? "—"}</td>
+                        </tr>)}</tbody>
                       </table>
                     )}
                   </section>
