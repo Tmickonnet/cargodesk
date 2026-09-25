@@ -870,7 +870,7 @@ function App() {
         if (!isMounted) return;
         const firstError = results.find((result) => result?.error)?.error;
         if (firstError) { setReportsData((current) => ({ ...current, error: firstError.message || "Unable to load operational report data.", unavailable: false })); return; }
-        setReportsData({ shipments: results[0].count ?? 0, bookings: results[1].count ?? 0, containers: results[2].count ?? 0, trackingEvents: results[3].count ?? 0, unresolvedExceptions: results[4].count ?? 0, deliveries: results[5].count ?? 0, documents: results[6].count ?? 0, error: "", unavailable: false });
+        setReportsData({ shipments: shipmentView ? results[0].count ?? 0 : null, bookings: bookingView ? results[1].count ?? 0 : null, containers: cargoView ? results[2].count ?? 0 : null, trackingEvents: trackingView ? results[3].count ?? 0 : null, unresolvedExceptions: exceptionView ? results[4].count ?? 0 : null, deliveries: deliveryView ? results[5].count ?? 0 : null, documents: documentView ? results[6].count ?? 0 : null, error: "", unavailable: false });
       } catch (error) {
         if (isMounted) setReportsData((current) => ({ ...current, error: error.message || "Unable to load operational report data.", unavailable: false }));
       } finally {
@@ -1895,13 +1895,13 @@ function App() {
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", marginBottom: "18px" }}>
                     {[["Shipments", reportsData.shipments], ["Bookings", reportsData.bookings], ["Container assignments", reportsData.containers], ["Deliveries", reportsData.deliveries], ["Documents", reportsData.documents], ["Unresolved exceptions", reportsData.unresolvedExceptions]].map(([label, value]) => (
-                      <div key={label} style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "10px", padding: "17px" }}><div style={{ fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div><div style={{ marginTop: "7px", fontSize: "27px", fontWeight: "700", color: "#173b6c" }}>{value}</div></div>
+                      <div key={label} style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "10px", padding: "17px" }}><div style={{ fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div><div style={{ marginTop: "7px", fontSize: "27px", fontWeight: "700", color: "#173b6c" }}>{value == null ? "Not available" : value}</div></div>
                     ))}
                   </div>
                   <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px" }}>
                     <div style={{ fontSize: "12px", fontWeight: "700", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "8px" }}>Tracking activity</div>
                     <h2 style={{ margin: "0 0 8px", fontSize: "19px", color: "#173b6c" }}>Recent tracking events</h2>
-                    <p style={{ margin: 0, color: "#627d98", fontSize: "13px", lineHeight: 1.6 }}>{reportsData.trackingEvents} tracking events recorded in the last 30 days through the authorized read path.</p>
+                    <p style={{ margin: 0, color: "#627d98", fontSize: "13px", lineHeight: 1.6 }}>{reportsData.trackingEvents == null ? "Tracking activity is not available for this role." : `${reportsData.trackingEvents} tracking events recorded in the last 30 days through the authorized read path.`}</p>
                     <div style={{ marginTop: "16px", padding: "12px 14px", background: "#f5f7fb", border: "1px solid #e5e9f0", borderRadius: "8px", color: "#627d98", fontSize: "12px", lineHeight: 1.6 }}>These figures are descriptive record counts. They do not infer shipment performance, compliance, commercial authority, or completion status.</div>
                   </section>
                 </>
