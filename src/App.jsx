@@ -508,10 +508,16 @@ function App() {
     const loadDashboardSnapshot = async () => {
       if (!isDashboard || !session || authorizationLoading || !role) return;
 
-      const permitted = await hasPermission("OPERATIONS_VIEW");
+      const [operationsView, shipmentView, documentView, deliveryView] =
+        await Promise.all([
+          hasPermission("OPERATIONS_VIEW"),
+          hasPermission("SHIPMENT_VIEW"),
+          hasPermission("DOCUMENT_VIEW"),
+          hasPermission("DELIVERY_VIEW"),
+        ]);
       if (!isMounted) return;
 
-      if (!permitted) {
+      if (!operationsView) {
         setDashboardData((current) => ({ ...current, unavailable: true, error: "" }));
         setDashboardLoading(false);
         return;
@@ -529,21 +535,27 @@ function App() {
 
       try {
         const [shipments, documents, deliveries] = await Promise.all([
-          supabase
-            .from("shipments")
-            .select("shipment_id, shipment_status_id")
-            .not("shipment_status_id", "is", null)
-            .limit(1000),
-          supabase
-            .from("documents")
-            .select("document_id, document_status_id")
-            .not("document_status_id", "is", null)
-            .limit(1000),
-          supabase
-            .from("delivery")
-            .select("delivery_id, delivery_status_id")
-            .not("delivery_status_id", "is", null)
-            .limit(1000),
+          shipmentView
+            ? supabase
+                .from("shipments")
+                .select("shipment_id, shipment_status_id")
+                .not("shipment_status_id", "is", null)
+                .limit(1000)
+            : Promise.resolve({ data: [], error: null }),
+          documentView
+            ? supabase
+                .from("documents")
+                .select("document_id, document_status_id")
+                .not("document_status_id", "is", null)
+                .limit(1000)
+            : Promise.resolve({ data: [], error: null }),
+          deliveryView
+            ? supabase
+                .from("delivery")
+                .select("delivery_id, delivery_status_id")
+                .not("delivery_status_id", "is", null)
+                .limit(1000)
+            : Promise.resolve({ data: [], error: null }),
         ]);
 
         if (!isMounted) return;
@@ -565,16 +577,22 @@ function App() {
         const pendingDeliveryStatusIds = new Set([1, 2, 3, 4, 6, 7].map(Number));
 
         setDashboardData({
-          activeShipments: (shipments.data ?? []).filter((item) =>
-            activeShipmentStatusIds.has(Number(item.shipment_status_id))
-          ).length,
-          pendingDocuments: (documents.data ?? []).filter((item) =>
-            pendingDocumentStatusIds.has(Number(item.document_status_id))
-          ).length,
+          activeShipments: shipmentView
+            ? (shipments.data ?? []).filter((item) =>
+                activeShipmentStatusIds.has(Number(item.shipment_status_id))
+              ).length
+            : null,
+          pendingDocuments: documentView
+            ? (documents.data ?? []).filter((item) =>
+                pendingDocumentStatusIds.has(Number(item.document_status_id))
+              ).length
+            : null,
           containersInTransit: null,
-          pendingDeliveries: (deliveries.data ?? []).filter((item) =>
-            pendingDeliveryStatusIds.has(Number(item.delivery_status_id))
-          ).length,
+          pendingDeliveries: deliveryView
+            ? (deliveries.data ?? []).filter((item) =>
+                pendingDeliveryStatusIds.has(Number(item.delivery_status_id))
+              ).length
+            : null,
           error: "",
           unavailable: false,
         });
@@ -841,20 +859,30 @@ function App() {
     let isMounted = true;
     const loadReportsWorkspace = async () => {
       if (activePage !== "Reports" || !session || authorizationLoading || !role) return;
-      const permitted = await hasPermission("OPERATIONS_VIEW");
+      const [operationsView, shipmentView, bookingView, cargoView, trackingView, exceptionView, deliveryView, documentView] =
+        await Promise.all([
+          hasPermission("OPERATIONS_VIEW"),
+          hasPermission("SHIPMENT_VIEW"),
+          hasPermission("BOOKING_VIEW"),
+          hasPermission("CARGO_VIEW"),
+          hasPermission("TRACKING_VIEW"),
+          hasPermission("EXCEPTION_VIEW"),
+          hasPermission("DELIVERY_VIEW"),
+          hasPermission("DOCUMENT_VIEW"),
+        ]);
       if (!isMounted) return;
-      if (!permitted) { setReportsData((current) => ({ ...current, unavailable: true, error: "" })); setReportsLoading(false); return; }
+      if (!operationsView) { setReportsData((current) => ({ ...current, unavailable: true, error: "" })); setReportsLoading(false); return; }
       setReportsLoading(true);
       try {
         const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const results = await Promise.all([
-          supabase.from("shipments").select("shipment_id", { count: "exact", head: true }),
-          supabase.from("bookings").select("booking_id", { count: "exact", head: true }),
-          supabase.from("shipment_container").select("shipment_container_id", { count: "exact", head: true }),
-          supabase.from("tracking_event").select("tracking_event_id", { count: "exact", head: true }).gte("event_datetime", since),
-          supabase.from("shipment_exception").select("shipment_exception_id", { count: "exact", head: true }).is("resolved_at", null),
-          supabase.from("delivery").select("delivery_id", { count: "exact", head: true }),
-          supabase.from("documents").select("document_id", { count: "exact", head: true }),
+          shipmentView ? supabase.from("shipments").select("shipment_id", { count: "exact", head: true }) : Promise.resolve({ count: null, error: null }),
+          bookingView ? supabase.from("bookings").select("booking_id", { count: "exact", head: true }) : Promise.resolve({ count: null, error: null }),
+          cargoView ? supabase.from("shipment_container").select("shipment_container_id", { count: "exact", head: true }) : Promise.resolve({ count: null, error: null }),
+          trackingView ? supabase.from("tracking_event").select("tracking_event_id", { count: "exact", head: true }).gte("event_datetime", since) : Promise.resolve({ count: null, error: null }),
+          exceptionView ? supabase.from("shipment_exception").select("shipment_exception_id", { count: "exact", head: true }).is("resolved_at", null) : Promise.resolve({ count: null, error: null }),
+          deliveryView ? supabase.from("delivery").select("delivery_id", { count: "exact", head: true }) : Promise.resolve({ count: null, error: null }),
+          documentView ? supabase.from("documents").select("document_id", { count: "exact", head: true }) : Promise.resolve({ count: null, error: null }),
         ]);
         if (!isMounted) return;
         const firstError = results.find((result) => result?.error)?.error;
