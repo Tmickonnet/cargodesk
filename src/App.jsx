@@ -113,6 +113,8 @@ function App() {
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [shipmentData, setShipmentData] = useState({ rows: [], error: "", unavailable: false });
   const [shipmentLoading, setShipmentLoading] = useState(false);
+  const [bookingData, setBookingData] = useState({ rows: [], error: "", unavailable: false });
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   const {
     role,
@@ -310,6 +312,7 @@ function App() {
   const isWarehouse = activePage === "Warehouse";
   const isReports = activePage === "Reports";
   const isShipments = activePage === "Shipments";
+  const isShipping = activePage === "Shipping";
 
 
   useEffect(() => {
@@ -436,6 +439,28 @@ function App() {
       isMounted = false;
     };
   }, [activePage, session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadBookingWorkspace = async () => {
+      if (!isShipping || !session || authorizationLoading || !role) return;
+      const permitted = await hasPermission("BOOKING_VIEW");
+      if (!isMounted) return;
+      if (!permitted) { setBookingData({ rows: [], error: "", unavailable: true }); setBookingLoading(false); return; }
+      setBookingLoading(true);
+      setBookingData({ rows: [], error: "", unavailable: false });
+      try {
+        const result = await supabase.from("bookings").select("booking_id, shipment_id, booking_number, booking_status_id, booking_date, requested_etd, confirmed_etd, requested_eta, confirmed_eta, voyage_number, freight_terms, carrier_reference").order("booking_date", { ascending: false, nullsFirst: false }).limit(25);
+        if (!isMounted) return;
+        if (result.error) { setBookingData({ rows: [], error: result.error.message || "Unable to load booking activity.", unavailable: false }); return; }
+        setBookingData({ rows: result.data ?? [], error: "", unavailable: false });
+      } catch (error) {
+        if (isMounted) setBookingData({ rows: [], error: error.message || "Unable to load booking activity.", unavailable: false });
+      } finally { if (isMounted) setBookingLoading(false); }
+    };
+    loadBookingWorkspace();
+    return () => { isMounted = false; };
+  }, [isShipping, session, authorizationLoading, role, hasPermission]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1587,6 +1612,17 @@ function App() {
                 {shipmentLoading ? <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading shipments...</div> : shipmentData.unavailable ? <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Shipment activity is not available for this role.</div> : shipmentData.error ? <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>Unable to load shipment activity: {shipmentData.error}</div> : <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", marginBottom: "14px" }}><h2 style={{ margin: 0, fontSize: "18px", color: "#173b6c" }}>Shipment records</h2><span style={{ fontSize: "12px", color: "#627d98" }}>Showing up to 25 records</span></div>
                   {shipmentData.rows.length === 0 ? <div style={{ color: "#627d98", fontSize: "13px" }}>No shipment records are available through the authorized read path.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1100px" }}><thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Shipment", "Status", "Transport Mode ID", "Planned Departure", "Planned Arrival", "Actual Departure", "Actual Arrival", "Cargo Ready"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead><tbody>{shipmentData.rows.map((item) => <tr key={item.shipment_id} style={{ borderBottom: "1px solid #eef2f7" }}><td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.shipment_number || ("Shipment " + item.shipment_id)}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.status?.status_name || item.status?.status_code || item.shipment_status_id || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.primary_transport_mode_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_departure_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_arrival_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_departure_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_arrival_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.cargo_ready_date || "—"}</td></tr>)}</tbody></table>}
+                </section>}
+              </div>
+            </>
+          ) : isShipping ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>← Back to Dashboard</button>
+                <div style={{ marginBottom: "20px" }}><div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Operations</div><h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Shipping</h1><p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>Read-only booking activity using the existing authorized booking data path.</p></div>
+                {bookingLoading ? <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading booking activity...</div> : bookingData.unavailable ? <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Booking activity is not available for this role.</div> : bookingData.error ? <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>Unable to load booking activity: {bookingData.error}</div> : <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", marginBottom: "14px" }}><h2 style={{ margin: 0, fontSize: "18px", color: "#173b6c" }}>Booking records</h2><span style={{ fontSize: "12px", color: "#627d98" }}>Status displayed as controlled ID; lookup access is not assumed.</span></div>
+                  {bookingData.rows.length === 0 ? <div style={{ color: "#627d98", fontSize: "13px" }}>No booking records are available through the authorized read path.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1200px" }}><thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Booking", "Shipment ID", "Status ID", "Booking Date", "Requested ETD", "Confirmed ETD", "Requested ETA", "Confirmed ETA", "Voyage", "Freight Terms", "Carrier Reference"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead><tbody>{bookingData.rows.map((item) => <tr key={item.booking_id} style={{ borderBottom: "1px solid #eef2f7" }}><td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.booking_number || ("Booking " + item.booking_id)}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.booking_status_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.booking_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.requested_etd || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.confirmed_etd || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.requested_eta || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.confirmed_eta || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.voyage_number || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.freight_terms || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.carrier_reference || "—"}</td></tr>)}</tbody></table>}
                 </section>}
               </div>
             </>
