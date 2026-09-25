@@ -115,6 +115,8 @@ function App() {
   const [shipmentLoading, setShipmentLoading] = useState(false);
   const [bookingData, setBookingData] = useState({ rows: [], error: "", unavailable: false });
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [auditLogData, setAuditLogData] = useState({ rows: [], error: "", unavailable: false });
+  const [auditLogLoading, setAuditLogLoading] = useState(false);
 
   const {
     role,
@@ -313,6 +315,7 @@ function App() {
   const isReports = activePage === "Reports";
   const isShipments = activePage === "Shipments";
   const isShipping = activePage === "Shipping";
+  const isAuditLog = activePage === "Audit Log";
 
 
   useEffect(() => {
@@ -585,6 +588,46 @@ function App() {
       isMounted = false;
     };
   }, [isDashboard, session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadAuditLogWorkspace = async () => {
+      if (!isAuditLog || !session || authorizationLoading || !role) return;
+      const permitted = await hasPermission("AUDIT_VIEW");
+      if (!isMounted) return;
+      if (!permitted) {
+        setAuditLogData({ rows: [], error: "", unavailable: true });
+        setAuditLogLoading(false);
+        return;
+      }
+      setAuditLogLoading(true);
+      setAuditLogData({ rows: [], error: "", unavailable: false });
+      try {
+        const result = await supabase
+          .from("audit_log")
+          .select("audit_log_id, action_type, table_name, record_reference, action_timestamp, user_id, description")
+          .order("action_timestamp", { ascending: false })
+          .order("audit_log_id", { ascending: false })
+          .limit(25);
+        if (!isMounted) return;
+        if (result.error) {
+          console.error("CargoDesk Audit Log workspace load failed:", result.error);
+          setAuditLogData({ rows: [], error: result.error.message || "Unable to load the Audit Log.", unavailable: false });
+          return;
+        }
+        setAuditLogData({ rows: result.data ?? [], error: "", unavailable: false });
+      } catch (error) {
+        if (isMounted) {
+          console.error("CargoDesk Audit Log workspace load failed:", error);
+          setAuditLogData({ rows: [], error: error.message || "Unable to load the Audit Log.", unavailable: false });
+        }
+      } finally {
+        if (isMounted) setAuditLogLoading(false);
+      }
+    };
+    loadAuditLogWorkspace();
+    return () => { isMounted = false; };
+  }, [isAuditLog, session, authorizationLoading, role, hasPermission]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1572,6 +1615,46 @@ function App() {
                   auditability.
                 </p>
               </section>
+            </>
+          ) : isAuditLog ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>← Back to Dashboard</button>
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Management</div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Audit Log</h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px", lineHeight: 1.6 }}>Read-only audit activity through the existing AUDIT_VIEW authorization boundary.</p>
+                </div>
+                {auditLogLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading Audit Log...</div>
+                ) : auditLogData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Audit Log access is not available for this role.</div>
+                ) : auditLogData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>Unable to load Audit Log data: {auditLogData.error}</div>
+                ) : (
+                  <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", marginBottom: "14px" }}>
+                      <h2 style={{ margin: 0, fontSize: "18px", color: "#173b6c" }}>Recent audit activity</h2>
+                      <span style={{ fontSize: "12px", color: "#627d98" }}>Showing up to 25 records</span>
+                    </div>
+                    {auditLogData.rows.length === 0 ? (
+                      <div style={{ color: "#627d98", fontSize: "13px" }}>No audit records are available through the authorized read path.</div>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                        <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Timestamp", "Action", "Actor ID", "Entity", "Record", "Description"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead>
+                        <tbody>{auditLogData.rows.map((item) => <tr key={item.audit_log_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.action_timestamp ? new Date(item.action_timestamp).toLocaleString() : "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#334e68" }}>{item.action_type || "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.user_id ?? "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.table_name || "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.record_reference || "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.description || "—"}</td>
+                        </tr>)}</tbody>
+                      </table>
+                    )}
+                  </section>
+                )}
+              </div>
             </>
           ) : isReports ? (
             <div style={{ marginBottom: "22px" }}>
