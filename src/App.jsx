@@ -534,28 +534,29 @@ function App() {
       });
 
       try {
+        const activeShipmentStatusIds = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+        const pendingDocumentStatusIds = [1, 2, 3, 4];
+        const pendingDeliveryStatusIds = [1, 2, 3, 4, 6, 7];
+
         const [shipments, documents, deliveries] = await Promise.all([
           shipmentView
             ? supabase
                 .from("shipments")
-                .select("shipment_id, shipment_status_id")
-                .not("shipment_status_id", "is", null)
-                .limit(1000)
-            : Promise.resolve({ data: [], error: null }),
+                .select("shipment_id", { count: "exact", head: true })
+                .in("shipment_status_id", activeShipmentStatusIds)
+            : Promise.resolve({ count: null, error: null }),
           documentView
             ? supabase
                 .from("documents")
-                .select("document_id, document_status_id")
-                .not("document_status_id", "is", null)
-                .limit(1000)
-            : Promise.resolve({ data: [], error: null }),
+                .select("document_id", { count: "exact", head: true })
+                .in("document_status_id", pendingDocumentStatusIds)
+            : Promise.resolve({ count: null, error: null }),
           deliveryView
             ? supabase
                 .from("delivery")
-                .select("delivery_id, delivery_status_id")
-                .not("delivery_status_id", "is", null)
-                .limit(1000)
-            : Promise.resolve({ data: [], error: null }),
+                .select("delivery_id", { count: "exact", head: true })
+                .in("delivery_status_id", pendingDeliveryStatusIds)
+            : Promise.resolve({ count: null, error: null }),
         ]);
 
         if (!isMounted) return;
@@ -570,29 +571,11 @@ function App() {
           return;
         }
 
-        const activeShipmentStatusIds = new Set(
-          [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(Number)
-        );
-        const pendingDocumentStatusIds = new Set([1, 2, 3, 4].map(Number));
-        const pendingDeliveryStatusIds = new Set([1, 2, 3, 4, 6, 7].map(Number));
-
         setDashboardData({
-          activeShipments: shipmentView
-            ? (shipments.data ?? []).filter((item) =>
-                activeShipmentStatusIds.has(Number(item.shipment_status_id))
-              ).length
-            : null,
-          pendingDocuments: documentView
-            ? (documents.data ?? []).filter((item) =>
-                pendingDocumentStatusIds.has(Number(item.document_status_id))
-              ).length
-            : null,
+          activeShipments: shipmentView ? shipments.count ?? 0 : null,
+          pendingDocuments: documentView ? documents.count ?? 0 : null,
           containersInTransit: null,
-          pendingDeliveries: deliveryView
-            ? (deliveries.data ?? []).filter((item) =>
-                pendingDeliveryStatusIds.has(Number(item.delivery_status_id))
-              ).length
-            : null,
+          pendingDeliveries: deliveryView ? deliveries.count ?? 0 : null,
           error: "",
           unavailable: false,
         });
