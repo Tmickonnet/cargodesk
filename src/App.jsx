@@ -151,7 +151,7 @@ function App() {
         error: statusError,
       } = await supabase
         .from("shipment_statuses")
-        .select("*")
+        .select("shipment_status_id")
         .limit(1);
 
       if (!isMounted) {
