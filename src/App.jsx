@@ -117,6 +117,8 @@ function App() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [auditLogData, setAuditLogData] = useState({ rows: [], error: "", unavailable: false });
   const [auditLogLoading, setAuditLogLoading] = useState(false);
+  const [documentationData, setDocumentationData] = useState({ rows: [], error: "", unavailable: false });
+  const [documentationLoading, setDocumentationLoading] = useState(false);
 
   const {
     role,
@@ -316,6 +318,7 @@ function App() {
   const isShipments = activePage === "Shipments";
   const isShipping = activePage === "Shipping";
   const isAuditLog = activePage === "Audit Log";
+  const isDocumentation = activePage === "Documentation";
 
 
   useEffect(() => {
@@ -628,6 +631,100 @@ function App() {
     loadAuditLogWorkspace();
     return () => { isMounted = false; };
   }, [isAuditLog, session, authorizationLoading, role, hasPermission]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadDocumentationWorkspace = async () => {
+      if (!isDocumentation || !session || authorizationLoading || !role) return;
+
+      const permitted = await hasPermission("DOCUMENT_VIEW");
+      if (!isMounted) return;
+
+      if (!permitted) {
+        setDocumentationData({ rows: [], error: "", unavailable: true });
+        setDocumentationLoading(false);
+        return;
+      }
+
+      setDocumentationLoading(true);
+      setDocumentationData({ rows: [], error: "", unavailable: false });
+
+      try {
+        const result = await supabase
+          .from("documents")
+          .select("document_id, document_number, document_title, document_type_id, document_status_id, file_name, version_number, is_current_version, uploaded_by, uploaded_at, expiry_date, updated_at")
+          .order("updated_at", { ascending: false, nullsFirst: false })
+          .limit(25);
+
+        if (!isMounted) return;
+
+        if (result.error) {
+          console.error("CargoDesk Documentation workspace load failed:", result.error);
+          setDocumentationData({
+            rows: [],
+            error: result.error.message || "Unable to load documentation activity.",
+            unavailable: false,
+          });
+          return;
+        }
+
+        const documentRows = result.data ?? [];
+        const documentIds = documentRows.map((item) => item.document_id).filter((id) => id != null);
+
+        if (documentIds.length === 0) {
+          setDocumentationData({ rows: [], error: "", unavailable: false });
+          return;
+        }
+
+        const linksResult = await supabase
+          .from("shipment_documents")
+          .select("document_id, shipment_id, is_primary")
+          .in("document_id", documentIds);
+
+        if (!isMounted) return;
+
+        if (linksResult.error) {
+          console.error("CargoDesk Documentation shipment linkage load failed:", linksResult.error);
+          setDocumentationData({
+            rows: [],
+            error: linksResult.error.message || "Unable to load shipment-document links.",
+            unavailable: false,
+          });
+          return;
+        }
+
+        const shipmentByDocument = new Map(
+          (linksResult.data ?? []).map((link) => [Number(link.document_id), link])
+        );
+
+        setDocumentationData({
+          rows: documentRows.map((item) => ({
+            ...item,
+            shipmentLink: shipmentByDocument.get(Number(item.document_id)) ?? null,
+          })),
+          error: "",
+          unavailable: false,
+        });
+      } catch (error) {
+        if (isMounted) {
+          console.error("CargoDesk Documentation workspace load failed:", error);
+          setDocumentationData({
+            rows: [],
+            error: error.message || "Unable to load documentation activity.",
+            unavailable: false,
+          });
+        }
+      } finally {
+        if (isMounted) setDocumentationLoading(false);
+      }
+    };
+
+    loadDocumentationWorkspace();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isDocumentation, session, authorizationLoading, role, hasPermission]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1687,7 +1784,77 @@ function App() {
                   </section>
                 </>
               )}
-            </div>          ) : isShipments ? (
+            </div>          ) : isDocumentation ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>
+                  ← Back to Dashboard
+                </button>
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Operations</div>
+                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Documentation</h1>
+                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px", lineHeight: 1.6 }}>
+                    Read-only document visibility through the existing DOCUMENT_VIEW authorization boundary.
+                  </p>
+                </div>
+                {documentationLoading ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>
+                    Loading documentation activity...
+                  </div>
+                ) : documentationData.unavailable ? (
+                  <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>
+                    Documentation activity is not available for this role.
+                  </div>
+                ) : documentationData.error ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>
+                    Unable to load documentation activity: {documentationData.error}
+                  </div>
+                ) : (
+                  <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", marginBottom: "14px" }}>
+                      <div>
+                        <h2 style={{ margin: 0, fontSize: "18px", color: "#173b6c" }}>Document records</h2>
+                        <p style={{ margin: "6px 0 0", color: "#627d98", fontSize: "12px" }}>
+                          Up to 25 records. Document type and status are shown as controlled IDs; no protected lookup access is assumed.
+                        </p>
+                      </div>
+                      <span style={{ fontSize: "12px", color: "#627d98" }}>{documentationData.rows.length} record(s)</span>
+                    </div>
+                    {documentationData.rows.length === 0 ? (
+                      <div style={{ color: "#627d98", fontSize: "13px" }}>No document records are available through the authorized read path.</div>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1350px" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid #d9e2ec" }}>
+                            {["Document", "Title", "Type ID", "Status ID", "Shipment ID", "File", "Version", "Current", "Uploaded", "Expiry", "Updated"].map((heading) => (
+                              <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {documentationData.rows.map((item) => (
+                            <tr key={item.document_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.document_number || ("Document " + item.document_id)}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#334e68" }}>{item.document_title || "—"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.document_type_id ?? "—"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.document_status_id ?? "—"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.shipment_id ?? "—"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.file_name || "—"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.version_number ?? "—"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.is_current_version == null ? "—" : item.is_current_version ? "Yes" : "No"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.uploaded_at ? new Date(item.uploaded_at).toLocaleString() : "—"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.expiry_date || "—"}</td>
+                              <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.updated_at ? new Date(item.updated_at).toLocaleString() : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </section>
+                )}
+              </div>
+            </>
+          ) : isShipments ? (
             <>
               <div style={{ marginBottom: "22px" }}>
                 <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>← Back to Dashboard</button>
