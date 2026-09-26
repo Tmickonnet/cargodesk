@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
 
-const emptyClassificationForm = { productId: "", classificationRecordId: "", sourceCode: "HUMAN_ENTERED" };\n\nconst emptyForm = {
+const emptyClassificationForm = { cargoId: "", productId: "", classificationRecordId: "", sourceCode: "HUMAN_ENTERED" };\n\nconst emptyForm = {
   commodityId: "",
   cargoDescription: "",
   hsCode: "",
