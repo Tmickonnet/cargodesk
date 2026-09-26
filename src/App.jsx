@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
+import DocumentSubmitActions from "./DocumentSubmitActions";
 
 const navigationGroups = [
   {
@@ -1972,7 +1973,22 @@ function App() {
                         </tbody>
                       </table>
                     )}
-                  </section>
+
+                  <DocumentSubmitActions
+                    rows={documentationData.rows}
+                    authorizationLoading={authorizationLoading}
+                    hasPermission={hasPermission}
+                    onTransitioned={(documentId) => {
+                      setDocumentationData((current) => ({
+                        ...current,
+                        rows: current.rows.map((row) =>
+                          Number(row.document_id) === Number(documentId)
+                            ? { ...row, document_status_id: 2, updated_at: new Date().toISOString() }
+                            : row
+                        ),
+                      }));
+                    }}
+                  />                  </section>
                 )}
               </div>
             </>
