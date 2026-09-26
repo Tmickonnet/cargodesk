@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
+import DocumentIssueActions from "./DocumentIssueActions";
 
 const UNDER_REVIEW_STATUS_ID = 3;
 
@@ -85,6 +86,13 @@ export default function DocumentApprovalActions({ rows, authorizationLoading, ha
 
   return (
     <>
+      <DocumentIssueActions
+        rows={rows}
+        authorizationLoading={authorizationLoading}
+        hasPermission={hasPermission}
+        onTransitioned={onTransitioned}
+      />
+
       {message ? (
         <div style={{marginBottom:"12px",padding:"10px 12px",background:"#f0fff4",border:"1px solid #c6f6d5",borderRadius:"8px",color:"#276749",fontSize:"12px"}}>
           {message}
