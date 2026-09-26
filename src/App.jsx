@@ -5,6 +5,7 @@ import DocumentSubmitActions from "./DocumentSubmitActions";
 import DocumentReviewActions from "./DocumentReviewActions";
 import ExceptionsWorkspace from "./ExceptionsWorkspace";
 import CreateShipmentForm from "./CreateShipmentForm";
+import ShipmentCargoWorkspace from "./ShipmentCargoWorkspace";
 
 const navigationGroups = [
   {
@@ -2127,6 +2128,7 @@ function App() {
                 </section>}
               </div>
             </>
+          <ShipmentCargoWorkspace shipments={shipmentData.rows} />
           ) : isWarehouse ? (
             <>
               <div style={{ marginBottom: "22px" }}>
