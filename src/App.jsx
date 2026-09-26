@@ -4,6 +4,7 @@ import { useAuthorization } from "./auth/useAuthorization";
 import DocumentSubmitActions from "./DocumentSubmitActions";
 import DocumentReviewActions from "./DocumentReviewActions";
 import ExceptionsWorkspace from "./ExceptionsWorkspace";
+import CreateShipmentForm from "./CreateShipmentForm";
 
 const navigationGroups = [
   {
@@ -118,6 +119,10 @@ function App() {
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [shipmentData, setShipmentData] = useState({ rows: [], error: "", unavailable: false });
   const [shipmentLoading, setShipmentLoading] = useState(false);
+  const [shipmentCreateAllowed, setShipmentCreateAllowed] = useState(false);
+  const [showShipmentCreate, setShowShipmentCreate] = useState(false);
+  const [shipmentCreateMessage, setShipmentCreateMessage] = useState("");
+  const [shipmentRefreshKey, setShipmentRefreshKey] = useState(0);
   const [bookingData, setBookingData] = useState({ rows: [], error: "", unavailable: false });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [auditLogData, setAuditLogData] = useState({ rows: [], error: "", unavailable: false });
@@ -484,8 +489,12 @@ function App() {
     let isMounted = true;
     const loadShipmentWorkspace = async () => {
       if (!isShipments || !session || authorizationLoading || !role) return;
-      const permitted = await hasPermission("SHIPMENT_VIEW");
+      const [permitted, canCreate] = await Promise.all([
+        hasPermission("SHIPMENT_VIEW"),
+        hasPermission("SHIPMENT_CREATE"),
+      ]);
       if (!isMounted) return;
+      setShipmentCreateAllowed(canCreate === true);
       if (!permitted) { setShipmentData({ rows: [], error: "", unavailable: true }); setShipmentLoading(false); return; }
       setShipmentLoading(true);
       setShipmentData({ rows: [], error: "", unavailable: false });
@@ -506,7 +515,15 @@ function App() {
     };
     loadShipmentWorkspace();
     return () => { isMounted = false; };
-  }, [isShipments, session, authorizationLoading, role, hasPermission]);
+  }, [isShipments, session, authorizationLoading, role, hasPermission, shipmentRefreshKey]);
+
+  const handleShipmentCreated = (result) => {
+    setShowShipmentCreate(false);
+    setShipmentRefreshKey((current) => current + 1);
+    setShipmentCreateMessage(
+      `Shipment ${result.shipment_number} created successfully in DRAFT status.`
+    );
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -2091,8 +2108,9 @@ function App() {
             <>
               <div style={{ marginBottom: "22px" }}>
                 <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>← Back to Dashboard</button>
-                <div style={{ marginBottom: "20px" }}><div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Operations</div><h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Shipments</h1><p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>Read-only shipment visibility using the existing authorized shipment data path.</p></div>
-                {shipmentLoading ? <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading shipments...</div> : shipmentData.unavailable ? <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Shipment activity is not available for this role.</div> : shipmentData.error ? <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>Unable to load shipment activity: {shipmentData.error}</div> : <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
+                <div style={{ marginBottom: "20px" }}><div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Operations</div><div style={{ display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-end" }}><div><h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Shipments</h1><p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>Create and monitor core shipment records through controlled authorized workflows.</p></div>{shipmentCreateAllowed && !showShipmentCreate && <button type="button" onClick={() => { setShipmentCreateMessage(""); setShowShipmentCreate(true); }} style={{ border: "none", borderRadius: "7px", padding: "10px 14px", background: "#173b6c", color: "#ffffff", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Create Shipment</button>}</div></div>
+                {shipmentCreateMessage && <div style={{ background: "#e6f4ea", border: "1px solid #b7dfc6", borderRadius: "8px", padding: "11px 13px", color: "#1f7a5a", fontSize: "12px", marginBottom: "16px" }}>{shipmentCreateMessage}</div>}
+                {showShipmentCreate ? <CreateShipmentForm onCreated={handleShipmentCreated} onCancel={() => setShowShipmentCreate(false)} /> : shipmentLoading ? <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading shipments...</div> : shipmentData.unavailable ? <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Shipment activity is not available for this role.</div> : shipmentData.error ? <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>Unable to load shipment activity: {shipmentData.error}</div> : <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", marginBottom: "14px" }}><h2 style={{ margin: 0, fontSize: "18px", color: "#173b6c" }}>Shipment records</h2><span style={{ fontSize: "12px", color: "#627d98" }}>Showing up to 25 records</span></div>
                   {shipmentData.rows.length === 0 ? <div style={{ color: "#627d98", fontSize: "13px" }}>No shipment records are available through the authorized read path.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1100px" }}><thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Shipment", "Status", "Transport Mode ID", "Planned Departure", "Planned Arrival", "Actual Departure", "Actual Arrival", "Cargo Ready"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead><tbody>{shipmentData.rows.map((item) => <tr key={item.shipment_id} style={{ borderBottom: "1px solid #eef2f7" }}><td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.shipment_number || ("Shipment " + item.shipment_id)}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.status?.status_name || item.status?.status_code || item.shipment_status_id || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.primary_transport_mode_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_departure_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_arrival_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_departure_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_arrival_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.cargo_ready_date || "—"}</td></tr>)}</tbody></table>}
                 </section>}
