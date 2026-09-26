@@ -1994,12 +1994,19 @@ function App() {
                     rows={documentationData.rows}
                     authorizationLoading={authorizationLoading}
                     hasPermission={hasPermission}
-                    onTransitioned={(documentId) => {
+                    onTransitioned={(documentId, transitionData) => {
+                      const statusIdByCode = {
+                        UNDER_REVIEW: 3,
+                        APPROVED: 4,
+                        ISSUED: 5,
+                      };
+                      const nextStatusId = statusIdByCode[transitionData?.new_status_code];
+                      if (!nextStatusId) return;
                       setDocumentationData((current) => ({
                         ...current,
                         rows: current.rows.map((row) =>
                           Number(row.document_id) === Number(documentId)
-                            ? { ...row, document_status_id: 3, updated_at: new Date().toISOString() }
+                            ? { ...row, document_status_id: nextStatusId, updated_at: transitionData?.transitioned_at || new Date().toISOString() }
                             : row
                         ),
                       }));

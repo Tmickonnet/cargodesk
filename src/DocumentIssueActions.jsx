@@ -1,31 +1,30 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
-import DocumentIssueActions from "./DocumentIssueActions";
 
-const UNDER_REVIEW_STATUS_ID = 3;
+const APPROVED_STATUS_ID = 4;
 
-export default function DocumentApprovalActions({ rows, authorizationLoading, hasPermission, onTransitioned }) {
+export default function DocumentIssueActions({ rows, authorizationLoading, hasPermission, onTransitioned }) {
   const [selected, setSelected] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [canApprove, setCanApprove] = useState(false);
+  const [canIssue, setCanIssue] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     const resolvePermission = async () => {
       if (authorizationLoading) {
-        if (isMounted) setCanApprove(false);
+        if (isMounted) setCanIssue(false);
         return;
       }
       const permitted = await hasPermission("DOCUMENT_VERIFY");
-      if (isMounted) setCanApprove(Boolean(permitted));
+      if (isMounted) setCanIssue(Boolean(permitted));
     };
     resolvePermission();
     return () => { isMounted = false; };
   }, [authorizationLoading, hasPermission]);
 
-  const openApproval = (item) => {
+  const openIssue = (item) => {
     setSelected(item);
     setMessage("");
     setError("");
@@ -39,7 +38,7 @@ export default function DocumentApprovalActions({ rows, authorizationLoading, ha
     }
   };
 
-  const handleApprove = async () => {
+  const handleIssue = async () => {
     setError("");
     setMessage("");
 
@@ -48,8 +47,8 @@ export default function DocumentApprovalActions({ rows, authorizationLoading, ha
       return;
     }
 
-    if (Number(selected.document_status_id) !== UNDER_REVIEW_STATUS_ID) {
-      setError("Only UNDER_REVIEW documents can be approved.");
+    if (Number(selected.document_status_id) !== APPROVED_STATUS_ID) {
+      setError("Only APPROVED documents can be issued.");
       return;
     }
 
@@ -57,26 +56,27 @@ export default function DocumentApprovalActions({ rows, authorizationLoading, ha
     try {
       const { data, error: rpcError } = await supabase.rpc("request_document_transition", {
         p_document_id: Number(selected.document_id),
-        p_transition_code: "APPROVE",
+        p_transition_code: "ISSUE",
         p_reason: null,
       });
 
       if (rpcError) {
-        setError(rpcError.message || "Unable to approve document.");
+        setError(rpcError.message || "Unable to issue document.");
         return;
       }
 
-      if (!data?.allowed || data?.new_status_code !== "APPROVED") {
-        setError("The document approval transition was not confirmed by the controlled workflow.");
+      if (!data?.allowed || data?.new_status_code !== "ISSUED") {
+        setError("The document issuance transition was not confirmed by the controlled workflow.");
         return;
       }
 
-      setMessage("Document approved successfully.");
+      setMessage("Document issued successfully.");
       const transitionedId = Number(selected.document_id);
       setSelected(null);
+
       if (onTransitioned) onTransitioned(transitionedId, data);
     } catch (transitionError) {
-      setError(transitionError?.message || "Unable to approve document.");
+      setError(transitionError?.message || "Unable to issue document.");
     } finally {
       setTransitioning(false);
     }
@@ -86,13 +86,6 @@ export default function DocumentApprovalActions({ rows, authorizationLoading, ha
 
   return (
     <>
-      <DocumentIssueActions
-        rows={rows}
-        authorizationLoading={authorizationLoading}
-        hasPermission={hasPermission}
-        onTransitioned={onTransitioned}
-      />
-
       {message ? (
         <div style={{marginBottom:"12px",padding:"10px 12px",background:"#f0fff4",border:"1px solid #c6f6d5",borderRadius:"8px",color:"#276749",fontSize:"12px"}}>
           {message}
@@ -105,34 +98,34 @@ export default function DocumentApprovalActions({ rows, authorizationLoading, ha
       ) : null}
 
       <section style={{marginTop:"16px",padding:"14px",background:"#f8fafc",border:"1px solid #e5e9f0",borderRadius:"10px"}}>
-        <div style={{fontSize:"11px",fontWeight:"700",color:"#627d98",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Controlled approval action</div>
+        <div style={{fontSize:"11px",fontWeight:"700",color:"#627d98",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Controlled issuance action</div>
         <div style={{fontSize:"12px",color:"#627d98",lineHeight:1.6}}>
-          Approve is available only for UNDER_REVIEW documents and only when the existing DOCUMENT_VERIFY permission is granted. The database transition function remains authoritative.
+          Issue is available only for APPROVED documents and only when the existing DOCUMENT_VERIFY permission is granted. The database transition function remains authoritative.
         </div>
         <div style={{marginTop:"10px",display:"flex",flexWrap:"wrap",gap:"8px"}}>
-          {rows.filter((item) => Number(item.document_status_id) === UNDER_REVIEW_STATUS_ID).map((item) =>
-            canApprove ? (
-              <button key={item.document_id} type="button" onClick={() => openApproval(item)} disabled={transitioning}
+          {rows.filter((item) => Number(item.document_status_id) === APPROVED_STATUS_ID).map((item) =>
+            canIssue ? (
+              <button key={item.document_id} type="button" onClick={() => openIssue(item)} disabled={transitioning}
                 style={{border:"1px solid #1f5f95",background:"#ffffff",color:"#1f5f95",borderRadius:"7px",padding:"7px 10px",cursor:transitioning ? "not-allowed" : "pointer",fontSize:"12px",fontWeight:"600"}}>
-                Approve {item.document_number || "Document " + item.document_id}
+                Issue {item.document_number || "Document " + item.document_id}
               </button>
             ) : null
           )}
-          {!canApprove ? <span style={{fontSize:"12px",color:"#627d98"}}>Approval action is not available for the current authorization context.</span> : null}
+          {!canIssue ? <span style={{fontSize:"12px",color:"#627d98"}}>Issuance action is not available for the current authorization context.</span> : null}
         </div>
       </section>
 
       {selected ? (
         <div style={{marginTop:"14px",padding:"14px",background:"#ffffff",border:"1px solid #d9e2ec",borderRadius:"10px"}}>
-          <div style={{fontSize:"13px",fontWeight:"700",color:"#173b6c"}}>Approve {selected.document_number || "Document " + selected.document_id}?</div>
+          <div style={{fontSize:"13px",fontWeight:"700",color:"#173b6c"}}>Issue {selected.document_number || "Document " + selected.document_id}?</div>
           <div style={{marginTop:"6px",fontSize:"12px",color:"#627d98",lineHeight:1.6}}>
-            This invokes the existing controlled UNDER_REVIEW → APPROVED transition. No direct document update or audit insert is performed by the application.
+            This invokes the existing controlled APPROVED → ISSUED transition. No direct document update or audit insert is performed by the application.
           </div>
           {error ? <div style={{marginTop:"10px",padding:"9px 10px",background:"#fff5f5",border:"1px solid #fed7d7",borderRadius:"7px",color:"#b83232",fontSize:"12px"}}>{error}</div> : null}
           <div style={{marginTop:"12px",display:"flex",gap:"8px"}}>
-            <button type="button" onClick={handleApprove} disabled={transitioning}
+            <button type="button" onClick={handleIssue} disabled={transitioning}
               style={{border:"1px solid #1f5f95",background:"#1f5f95",color:"#ffffff",borderRadius:"7px",padding:"8px 12px",cursor:transitioning ? "not-allowed" : "pointer",fontSize:"12px",fontWeight:"700"}}>
-              {transitioning ? "Approving..." : "Confirm Approval"}
+              {transitioning ? "Issuing..." : "Confirm Issuance"}
             </button>
             <button type="button" onClick={close} disabled={transitioning}
               style={{border:"1px solid #cbd5e0",background:"#ffffff",color:"#486581",borderRadius:"7px",padding:"8px 12px",cursor:transitioning ? "not-allowed" : "pointer",fontSize:"12px",fontWeight:"600"}}>
