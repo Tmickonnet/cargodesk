@@ -20,9 +20,10 @@ const emptyForm = {
   expiryDate: "",
 };
 
-function ShipmentCargoWorkspace({ shipments = [], canEdit = false }) {
+function ShipmentCargoWorkspace({ shipments = [] }) {
   const [selectedShipmentId, setSelectedShipmentId] = useState("");
   const { hasPermission } = useAuthorization(true);
+  const [canEdit, setCanEdit] = useState(false);
   const [masterDataView, setMasterDataView] = useState(false);
   const [references, setReferences] = useState({ commodities: [], packagingTypes: [], uoms: [] });
   const [cargoRows, setCargoRows] = useState([]);
@@ -43,9 +44,13 @@ function ShipmentCargoWorkspace({ shipments = [], canEdit = false }) {
     let mounted = true;
     const loadReferences = async () => {
       setReferencesLoading(true);
-      const masterView = await hasPermission("MASTER_DATA_VIEW");
+      const [masterView, cargoEdit] = await Promise.all([
+        hasPermission("MASTER_DATA_VIEW"),
+        hasPermission("CARGO_EDIT"),
+      ]);
       if (!mounted) return;
       setMasterDataView(masterView === true);
+      setCanEdit(cargoEdit === true);
       const commodityResult = masterView
         ? await supabase.from("commodities").select("commodity_id, commodity_code, commodity_name, hs_code, default_uom_id").eq("is_active", true).order("commodity_name")
         : { data: [], error: null };
