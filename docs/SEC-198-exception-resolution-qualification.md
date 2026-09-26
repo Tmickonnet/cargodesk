@@ -2,7 +2,7 @@
 
 ## Status
 
-PROPOSED → QUALIFIED → RECONCILED FOR CURRENT-MAIN VERIFICATION
+PROPOSED → QUALIFIED → RECONCILED → CORRECTED → FRESH PREVIEW READY → AUTHENTICATED UI VERIFIED
 
 SEC-198 is the controlled frontend implementation for exception resolution using the already-verified production database contract established under SEC-197.
 
@@ -38,20 +38,34 @@ The database remains authoritative.
 - Authorization fails closed while authentication/authorization is unresolved.
 - The UI does not infer authorization from role names.
 
-## Safe verification boundary
+## Verification boundary and results
 
-The reconciled implementation must be verified for:
+The reconciled implementation was verified for:
 
-1. successful application build;
+1. successful preview deployment readiness;
 2. Exceptions navigation and workspace loading through the authorized read path;
-3. permission-gated resolution action;
-4. client-side validation;
-5. RPC wiring to the existing controlled function;
-6. preservation of direct table-write restrictions;
-7. invalid-transition protection using the existing resolved exception;
-8. preview deployment readiness and runtime health.
+3. existing exception visibility;
+4. permission-gated resolution action behavior;
+5. preservation of the already-resolved state;
+6. client-side and RPC implementation inspection;
+7. preservation of direct table-write restrictions;
+8. preview runtime health.
 
-A successful `OPEN → RESOLVED` production mutation remains pending because the current production exception is already RESOLVED. No production exception will be manufactured merely to obtain a successful test.
+Authenticated UI verification confirmed:
+
+- Exceptions workspace loads successfully;
+- 1 exception is loaded;
+- `EXC-CDG-2026-0001` is displayed;
+- type is `DOCUMENTATION_DISCREPANCY`;
+- severity is `LOW`;
+- status is `RESOLVED`;
+- the existing reported/updated information displays;
+- action is `No action`, as expected for an already-resolved exception;
+- no production exception was created or modified.
+
+The current preview deployment is READY and is tied to commit `32cb5a2a7fd265e0f32c589ffc928ef2959ad5dd`. Vercel reports no runtime errors in the selected verification window, and the GitHub Vercel status for that commit is successful.
+
+A successful `OPEN → RESOLVED` production mutation remains intentionally unperformed because the current production exception is already RESOLVED. No production exception will be manufactured merely to obtain a successful test.
 
 ## Explicit exclusions
 
@@ -75,6 +89,6 @@ Live security inspection also confirmed that `shipment_exception` has RLS enable
 
 ## Current status
 
-**RECONCILED → CORRECTED → PENDING FRESH PREVIEW/BUILD VERIFICATION**
+**PROPOSED → QUALIFIED → RECONCILED → CORRECTED → FRESH PREVIEW READY → AUTHENTICATED UI VERIFIED → PENDING OWNER APPROVAL**
 
 No production database mutation has been performed by this reconciliation.
