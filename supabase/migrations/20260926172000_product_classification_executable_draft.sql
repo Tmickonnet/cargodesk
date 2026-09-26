@@ -91,7 +91,8 @@ CREATE TABLE logistics.classification_record (
     CONSTRAINT classification_record_unique_key UNIQUE (classification_edition_id, classification_jurisdiction_id, classification_code),
     CONSTRAINT classification_record_edition_fk FOREIGN KEY (classification_edition_id) REFERENCES logistics.classification_edition(classification_edition_id) ON DELETE RESTRICT,
     CONSTRAINT classification_record_jurisdiction_fk FOREIGN KEY (classification_jurisdiction_id) REFERENCES logistics.classification_jurisdiction(classification_jurisdiction_id) ON DELETE RESTRICT,
-    CONSTRAINT classification_record_parent_fk FOREIGN KEY (parent_classification_record_id) REFERENCES logistics.classification_record(classification_record_id) ON DELETE RESTRICT,
+    CONSTRAINT classification_record_parent_context_key UNIQUE (classification_record_id, classification_edition_id, classification_jurisdiction_id),
+    CONSTRAINT classification_record_parent_context_fk FOREIGN KEY (parent_classification_record_id, classification_edition_id, classification_jurisdiction_id) REFERENCES logistics.classification_record(classification_record_id, classification_edition_id, classification_jurisdiction_id) ON DELETE RESTRICT,
     CONSTRAINT classification_record_status_ck CHECK (status_code IN ('ACTIVE','SUPERSEDED','RETIRED')),
     CONSTRAINT classification_record_not_self_parent_ck CHECK (parent_classification_record_id IS NULL OR parent_classification_record_id <> classification_record_id)
 );
