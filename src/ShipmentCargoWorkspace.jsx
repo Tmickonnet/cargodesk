@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
 
-const emptyForm = {
+const emptyClassificationForm = { productId: "", classificationRecordId: "", sourceCode: "HUMAN_ENTERED" };\n\nconst emptyForm = {
   commodityId: "",
   cargoDescription: "",
   hsCode: "",
@@ -26,7 +26,7 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
   const [canEdit, setCanEdit] = useState(false);
   const [masterDataView, setMasterDataView] = useState(false);
   const [references, setReferences] = useState({ commodities: [], packagingTypes: [], uoms: [] });
-  const [cargoRows, setCargoRows] = useState([]);
+  const [cargoRows, setCargoRows] = useState([]);\n  const [classificationRows, setClassificationRows] = useState([]);\n  const [classificationReferences, setClassificationReferences] = useState({ products: [], records: [] });\n  const [classificationForm, setClassificationForm] = useState(emptyClassificationForm);\n  const [classificationSubmitting, setClassificationSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [referencesLoading, setReferencesLoading] = useState(true);
@@ -73,7 +73,7 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
     return () => { mounted = false; };
   }, [hasPermission]);
 
-  const loadCargo = async (shipmentId) => {
+  const loadClassification = async (cargoIds) => {\n    if (!cargoIds.length) { setClassificationRows([]); return; }\n    const result = await supabase.from("shipment_cargo_classification").select("shipment_cargo_classification_id,shipment_cargo_id,product_id,classification_record_id,classification_code_snapshot,classification_description_snapshot,classification_system_code_snapshot,classification_edition_code_snapshot,jurisdiction_code_snapshot,status_code,source_code,verified_by,verified_at").in("shipment_cargo_id", cargoIds).order("shipment_cargo_classification_id", { ascending: false });\n    if (!result.error) setClassificationRows(result.data || []);\n  };\n\n  const loadCargo = async (shipmentId) => {
     if (!shipmentId) {
       setCargoRows([]);
       return;
@@ -86,7 +86,7 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
       .eq("shipment_id", Number(shipmentId))
       .order("shipment_cargo_id", { ascending: false });
     if (result.error) setError(result.error.message || "Unable to load shipment cargo.");
-    else setCargoRows(result.data ?? []);
+    else { setCargoRows(result.data ?? []); await loadClassification((result.data ?? []).map((row) => row.shipment_cargo_id)); }
     setLoading(false);
   };
 
@@ -218,7 +218,7 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
             </form>
           )}
 
-          <div style={{ marginTop: "22px", overflowX: "auto" }}>
+          {canEdit && masterDataView && cargoRows.length > 0 && classificationReferences.products.length > 0 && classificationReferences.records.length > 0 && (\n            <div style={{ marginTop: "22px", padding: "16px", border: "1px solid #e5e9f0", borderRadius: "10px", background: "#f8fafc" }}>\n              <h3 style={{ margin: "0 0 6px", fontSize: "15px", color: "#173b6c" }}>Classification Proposal</h3>\n              <p style={{ margin: "0 0 14px", fontSize: "11px", color: "#627d98" }}>Create a proposed product classification for an existing cargo line. Verification is a separate controlled step.</p>\n              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: "0 16px" }}>\n                <div style={fieldStyle}><label style={labelStyle}>Cargo Line</label><select value={classificationForm.cargoId || ""} onChange={(e) => setClassificationForm((x) => ({...x,cargoId:e.target.value}))} style={inputStyle}><option value="">Select cargo line</option>{cargoRows.map((x) => <option key={x.shipment_cargo_id} value={x.shipment_cargo_id}>Line {x.shipment_cargo_id} — {x.cargo_description || "Cargo"}</option>)}</select></div>\n                <div style={fieldStyle}><label style={labelStyle}>Product / Sub-commodity</label><select value={classificationForm.productId} onChange={(e) => setClassificationForm((x) => ({...x,productId:e.target.value}))} style={inputStyle}><option value="">Select product</option>{classificationReferences.products.map((x) => <option key={x.product_id} value={x.product_id}>{x.product_name} ({x.product_code})</option>)}</select></div>\n                <div style={fieldStyle}><label style={labelStyle}>Classification Record</label><select value={classificationForm.classificationRecordId} onChange={(e) => setClassificationForm((x) => ({...x,classificationRecordId:e.target.value}))} style={inputStyle}><option value="">Select classification</option>{classificationReferences.records.map((x) => <option key={x.classification_record_id} value={x.classification_record_id}>{x.classification_code} — {x.official_description}</option>)}</select></div>\n              </div>\n              <button type="button" disabled={classificationSubmitting || !classificationForm.cargoId || !classificationForm.productId || !classificationForm.classificationRecordId} onClick={async () => {\n                setClassificationSubmitting(true); setError(""); setMessage("");\n                const {data,error:rpcError}=await supabase.rpc("create_shipment_cargo_classification",{p_shipment_cargo_id:Number(classificationForm.cargoId),p_product_id:Number(classificationForm.productId),p_classification_record_id:Number(classificationForm.classificationRecordId),p_source_code:classificationForm.sourceCode});\n                if (rpcError) setError(rpcError.message || "Unable to create classification proposal.");\n                else if (!data?.success || data?.status_code !== "SUGGESTED") setError("Classification creation returned an invalid result.");\n                else { setMessage("Classification proposal created successfully."); setClassificationForm(emptyClassificationForm); await loadCargo(selectedShipmentId); }\n                setClassificationSubmitting(false);\n              }} style={{ border:"none",borderRadius:"7px",padding:"10px 14px",background:"#173b6c",color:"#fff",fontSize:"12px",fontWeight:"700" }}>{classificationSubmitting ? "Creating Proposal..." : "Create Classification Proposal"}</button>\n              {classificationReferences.products.length === 0 && <div style={{ marginTop:"10px",fontSize:"11px",color:"#627d98" }}>No authoritative Product records are currently available. No classification can be proposed until reference data is populated.</div>}\n            </div>\n          )}\n\n          <div style={{ marginTop: "22px", overflowX: "auto" }}>
             <h3 style={{ margin: "0 0 10px", fontSize: "15px", color: "#173b6c" }}>Cargo lines</h3>
             {cargoRows.length === 0 ? (
               <div style={{ color: "#627d98", fontSize: "12px" }}>No cargo lines are recorded for this shipment.</div>
