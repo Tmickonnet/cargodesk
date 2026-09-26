@@ -3,7 +3,7 @@ import { supabase } from "./lib/supabase";
 
 const APPROVED_STATUS_ID = 4;
 
-export default function DocumentIssueActions({ rows, authorizationLoading, hasPermission, onTransitioned }) {
+export default function DocumentIssueActions({ rows, authorizationLoading, hasPermission }) {
   const [selected, setSelected] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
   const [message, setMessage] = useState("");
@@ -71,9 +71,11 @@ export default function DocumentIssueActions({ rows, authorizationLoading, hasPe
       }
 
       setMessage("Document issued successfully.");
-      const transitionedId = Number(selected.document_id);
       setSelected(null);
-      if (onTransitioned) onTransitioned(transitionedId, data);
+
+      // The database is authoritative. Refresh the documentation workspace
+      // rather than allowing the parent approval handler to retain stale status.
+      window.setTimeout(() => window.location.reload(), 300);
     } catch (transitionError) {
       setError(transitionError?.message || "Unable to issue document.");
     } finally {
