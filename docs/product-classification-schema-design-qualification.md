@@ -32,7 +32,7 @@ A recent information_schema foreign-key query returned an empty result where pre
 
 No schema decision is based on that anomalous result.
 
-Before implementation, the exact production constraint map must be re-verified through an authoritative catalog query and recorded in the migration qualification evidence.
+The exact production constraint map has now been independently re-verified through the authoritative PostgreSQL constraint catalog; the verification is recorded in the qualification addendum and introduces no production change.
 
 ## 4. Proposed logical model
 
