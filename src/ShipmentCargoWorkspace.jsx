@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
 
+const emptyClassificationForm = { cargoId: "", productId: "", classificationRecordId: "", sourceCode: "HUMAN_ENTERED" };
+
 const emptyForm = {
   commodityId: "",
   cargoDescription: "",
@@ -27,6 +29,10 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
   const [masterDataView, setMasterDataView] = useState(false);
   const [references, setReferences] = useState({ commodities: [], packagingTypes: [], uoms: [] });
   const [cargoRows, setCargoRows] = useState([]);
+  const [classificationRows, setClassificationRows] = useState([]);
+  const [classificationReferences, setClassificationReferences] = useState({ products: [], systems: [], jurisdictions: [], editions: [], records: [] });
+  const [classificationForm, setClassificationForm] = useState(emptyClassificationForm);
+  const [classificationSubmitting, setClassificationSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [referencesLoading, setReferencesLoading] = useState(true);
@@ -73,6 +79,12 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
     return () => { mounted = false; };
   }, [hasPermission]);
 
+  const loadClassification = async (cargoIds) => {
+    if (!cargoIds.length) { setClassificationRows([]); return; }
+    const result = await supabase.from("shipment_cargo_classification").select("shipment_cargo_classification_id,shipment_cargo_id,product_id,classification_record_id,classification_code_snapshot,classification_description_snapshot,classification_system_code_snapshot,classification_edition_code_snapshot,jurisdiction_code_snapshot,status_code,source_code,verified_by,verified_at").in("shipment_cargo_id", cargoIds).order("shipment_cargo_classification_id", { ascending: false });
+    if (!result.error) setClassificationRows(result.data || []);
+  };
+
   const loadCargo = async (shipmentId) => {
     if (!shipmentId) {
       setCargoRows([]);
@@ -86,15 +98,29 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
       .eq("shipment_id", Number(shipmentId))
       .order("shipment_cargo_id", { ascending: false });
     if (result.error) setError(result.error.message || "Unable to load shipment cargo.");
-    else setCargoRows(result.data ?? []);
+    else { setCargoRows(result.data ?? []); await loadClassification((result.data ?? []).map((row) => row.shipment_cargo_id)); }
     setLoading(false);
   };
 
   useEffect(() => {
+    if (masterDataView) {
+      Promise.all([
+        supabase.from("product").select("product_id,product_code,product_name").eq("is_active", true).order("product_name"),
+        supabase.from("classification_system").select("classification_system_id,system_code,system_name").eq("is_active", true).order("system_name"),
+        supabase.from("classification_jurisdiction").select("classification_jurisdiction_id,jurisdiction_code,jurisdiction_name").eq("is_active", true).order("jurisdiction_name"),
+        supabase.from("classification_edition").select("classification_edition_id,classification_system_id,edition_code,edition_name,status_code").eq("status_code", "ACTIVE").order("edition_code"),
+        supabase.from("classification_record").select("classification_record_id,classification_edition_id,classification_jurisdiction_id,classification_code,official_description,status_code").eq("status_code", "ACTIVE").order("classification_code")
+      ]).then(([products, systems, jurisdictions, editions, records]) => {
+        const firstError = [products, systems, jurisdictions, editions, records].find((x) => x.error)?.error;
+        if (firstError) setError(firstError.message || "Unable to load classification reference data.");
+        else setClassificationReferences({ products: products.data || [], systems: systems.data || [], jurisdictions: jurisdictions.data || [], editions: editions.data || [], records: records.data || [] });
+      });
+    }
     loadCargo(selectedShipmentId);
     setForm(emptyForm);
+    setClassificationForm(emptyClassificationForm);
     setMessage("");
-  }, [selectedShipmentId]);
+  }, [selectedShipmentId, masterDataView]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -216,6 +242,30 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
                 {submitting ? "Adding Cargo..." : "Add Cargo Line"}
               </button>
             </form>
+          )}
+
+          {canEdit && masterDataView && cargoRows.length > 0 && (
+            <div style={{ marginTop: "22px", padding: "16px", border: "1px solid #e5e9f0", borderRadius: "10px", background: "#f8fafc" }}>
+              <h3 style={{ margin: "0 0 6px", fontSize: "15px", color: "#173b6c" }}>Classification Proposal</h3>
+              <p style={{ margin: "0 0 14px", fontSize: "11px", color: "#627d98" }}>Create a proposed product classification for an existing cargo line. Verification is a separate controlled step.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: "0 16px" }}>
+                <div style={fieldStyle}><label style={labelStyle}>Cargo Line</label><select value={classificationForm.cargoId || ""} onChange={(e) => setClassificationForm((x) => ({...x,cargoId:e.target.value}))} style={inputStyle}><option value="">Select cargo line</option>{cargoRows.map((x) => <option key={x.shipment_cargo_id} value={x.shipment_cargo_id}>Line {x.shipment_cargo_id} — {x.cargo_description || "Cargo"}</option>)}</select></div>
+                <div style={fieldStyle}><label style={labelStyle}>Product / Sub-commodity</label><select value={classificationForm.productId} onChange={(e) => setClassificationForm((x) => ({...x,productId:e.target.value}))} style={inputStyle}><option value="">Select product</option>{classificationReferences.products.map((x) => <option key={x.product_id} value={x.product_id}>{x.product_name} ({x.product_code})</option>)}</select></div>
+                <div style={fieldStyle}><label style={labelStyle}>Classification System</label><select value={classificationForm.systemId || ""} onChange={(e) => setClassificationForm((x) => ({...x,systemId:e.target.value,editionId:"",jurisdictionId:"",classificationRecordId:""}))} style={inputStyle}><option value="">Select system</option>{classificationReferences.systems.map((x) => <option key={x.classification_system_id} value={x.classification_system_id}>{x.system_name} ({x.system_code})</option>)}</select></div>
+                <div style={fieldStyle}><label style={labelStyle}>Edition</label><select value={classificationForm.editionId || ""} onChange={(e) => setClassificationForm((x) => ({...x,editionId:e.target.value,classificationRecordId:""}))} style={inputStyle}><option value="">Select edition</option>{classificationReferences.editions.filter((x) => String(x.classification_system_id) === String(classificationForm.systemId)).map((x) => <option key={x.classification_edition_id} value={x.classification_edition_id}>{x.edition_code} — {x.edition_name}</option>)}</select></div>
+                <div style={fieldStyle}><label style={labelStyle}>Jurisdiction</label><select value={classificationForm.jurisdictionId || ""} onChange={(e) => setClassificationForm((x) => ({...x,jurisdictionId:e.target.value,classificationRecordId:""}))} style={inputStyle}><option value="">Select jurisdiction</option>{classificationReferences.jurisdictions.map((x) => <option key={x.classification_jurisdiction_id} value={x.classification_jurisdiction_id}>{x.jurisdiction_name} ({x.jurisdiction_code})</option>)}</select></div>
+                <div style={fieldStyle}><label style={labelStyle}>Classification Record</label><select value={classificationForm.classificationRecordId} onChange={(e) => setClassificationForm((x) => ({...x,classificationRecordId:e.target.value}))} style={inputStyle}><option value="">Select classification</option>{classificationReferences.records.filter((x) => String(x.classification_edition_id) === String(classificationForm.editionId) && String(x.classification_jurisdiction_id) === String(classificationForm.jurisdictionId)).map((x) => <option key={x.classification_record_id} value={x.classification_record_id}>{x.classification_code} — {x.official_description}</option>)}</select></div>
+              </div>
+              <button type="button" disabled={classificationSubmitting || !classificationForm.cargoId || !classificationForm.productId || !classificationForm.classificationRecordId} onClick={async () => {
+                setClassificationSubmitting(true); setError(""); setMessage("");
+                const {data,error:rpcError}=await supabase.rpc("create_shipment_cargo_classification",{p_shipment_cargo_id:Number(classificationForm.cargoId),p_product_id:Number(classificationForm.productId),p_classification_record_id:Number(classificationForm.classificationRecordId),p_source_code:classificationForm.sourceCode});
+                if (rpcError) setError(rpcError.message || "Unable to create classification proposal.");
+                else if (!data?.success || data?.status_code !== "SUGGESTED") setError("Classification creation returned an invalid result.");
+                else { setMessage("Classification proposal created successfully."); setClassificationForm(emptyClassificationForm); await loadCargo(selectedShipmentId); }
+                setClassificationSubmitting(false);
+              }} style={{ border:"none",borderRadius:"7px",padding:"10px 14px",background:"#173b6c",color:"#fff",fontSize:"12px",fontWeight:"700" }}>{classificationSubmitting ? "Creating Proposal..." : "Create Classification Proposal"}</button>
+              {classificationReferences.products.length === 0 || classificationReferences.records.length === 0 ? <div style={{ marginTop:"10px",fontSize:"11px",color:"#627d98" }}>No active classification reference records are currently available.</div> : null}
+            </div>
           )}
 
           <div style={{ marginTop: "22px", overflowX: "auto" }}>
