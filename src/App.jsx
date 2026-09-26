@@ -6,6 +6,7 @@ import DocumentReviewActions from "./DocumentReviewActions";
 import ExceptionsWorkspace from "./ExceptionsWorkspace";
 import CreateShipmentForm from "./CreateShipmentForm";
 import ShipmentCargoWorkspace from "./ShipmentCargoWorkspace";
+import ProductClassificationWorkspace from "./ProductClassificationWorkspace";
 
 const navigationGroups = [
   {
@@ -2117,6 +2118,7 @@ function App() {
                 </section>}
               </div>
               <ShipmentCargoWorkspace shipments={shipmentData.rows} />
+              <ProductClassificationWorkspace />
             </>
           ) : isShipping ? (
             <>
