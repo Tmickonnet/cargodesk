@@ -2,9 +2,9 @@
 
 ## Status
 
-**PROPOSED → READ-ONLY INSPECTED → VERIFIED → APPROVED → IMPLEMENTED ON BRANCH → PREVIEW BUILD VERIFIED → PENDING MERGE / PRODUCTION APPROVAL**
+**PROPOSED → READ-ONLY INSPECTED → VERIFIED → APPROVED → IMPLEMENTED ON BRANCH → PREVIEW BUILD VERIFIED → AUTHENTICATED UI VERIFIED → PENDING MERGE / PRODUCTION APPROVAL**
 
-This document qualifies the smallest safe controlled shipment-creation workflow for CargoDesk Global. It does not implement a database function, grant privileges, alter RLS/RBAC, create production data, or modify the frontend.
+This document records the qualification and controlled implementation evidence for the smallest safe shipment-creation workflow. Production application of the shipment-creation function remains pending.
 
 ## Verified production foundation
 
@@ -113,7 +113,7 @@ This preserves the existing permission boundaries and avoids partially populated
 
 Shipment creation should generate a controlled audit entry from the database-side workflow. The frontend must not write directly to `audit_log`.
 
-The exact action_type/description payload should be confirmed against the existing audit vocabulary before implementation; no historical shipment-creation audit convention was found, so none is being invented here.
+The existing audit vocabulary was reviewed and does not contain a shipment-creation action. No restrictive audit action_type constraint was identified, so `SHIPMENT_CREATED` is introduced specifically for this controlled workflow.
 
 ## Frontend proposal
 
@@ -187,10 +187,11 @@ Implementation preserves the approved boundaries:
 
 ### Verification evidence
 
-- Branch is 4 commits ahead of current `main`, 0 behind.
+- PR #50 currently contains 7 commits against current `main`; the implementation branch remains based on the current `main` baseline.
 - GitHub PR #50 was opened as a draft against current `main`.
-- Vercel preview deployment for commit `cc96dead4d9411cd9a8c9213600d2616d93e078f` reached **READY**:
-  `cargodesk-621pjoyn2-tmickonnet-5589s-projects.vercel.app`.
+- Vercel preview deployment for the implementation branch reached **READY** at `cargodesk-621pjoyn2-tmickonnet-5589s-projects.vercel.app`.
+- Authenticated UI verification confirmed the Create Shipment form loads all required reference-data fields without the previously observed `permission denied for table shipment_types` error.
+- The seven reference-data SELECT privileges required by the form are source-controlled separately in `20260926133632_controlled_reference_data_select_privileges.sql`.
 - Production read-only verification confirms the new `logistics.create_shipment(...)` function is **not yet present**, so no production database mutation has occurred.
 - Production shipment data remains unchanged by this implementation stage.
 
@@ -198,4 +199,4 @@ Implementation preserves the approved boundaries:
 
 The implementation is **not yet merged or production-deployed**.
 
-Before merge, the migration/function SQL and frontend diff must receive final review. Production application of the migration and production deployment remain separate controlled actions. No production shipment should be created solely to prove the feature.
+Final source review for the current controlled scope is complete; merge remains a separate owner approval gate. Production application of the migration and production deployment remain separate controlled actions. No production shipment should be created solely to prove the feature.
