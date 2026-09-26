@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
+import { useAuthorization } from "./auth/useAuthorization";
 
 const emptyForm = {
   commodityId: "",
@@ -21,6 +22,8 @@ const emptyForm = {
 
 function ShipmentCargoWorkspace({ shipments = [], canEdit = false }) {
   const [selectedShipmentId, setSelectedShipmentId] = useState("");
+  const { hasPermission } = useAuthorization(true);
+  const [masterDataView, setMasterDataView] = useState(false);
   const [references, setReferences] = useState({ commodities: [], packagingTypes: [], uoms: [] });
   const [cargoRows, setCargoRows] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -40,8 +43,14 @@ function ShipmentCargoWorkspace({ shipments = [], canEdit = false }) {
     let mounted = true;
     const loadReferences = async () => {
       setReferencesLoading(true);
+      const masterView = await hasPermission("MASTER_DATA_VIEW");
+      if (!mounted) return;
+      setMasterDataView(masterView === true);
+      const commodityResult = masterView
+        ? await supabase.from("commodities").select("commodity_id, commodity_code, commodity_name, hs_code, default_uom_id").eq("is_active", true).order("commodity_name")
+        : { data: [], error: null };
       const results = await Promise.all([
-        supabase.from("commodities").select("commodity_id, commodity_code, commodity_name, hs_code, default_uom_id").eq("is_active", true).order("commodity_name"),
+        Promise.resolve(commodityResult),
         supabase.from("packaging_types").select("packaging_type_id, type_code, type_name").eq("is_active", true).order("type_name"),
         supabase.from("unit_of_measures").select("uom_id, uom_code, uom_name").eq("is_active", true).order("uom_code"),
       ]);
@@ -57,7 +66,7 @@ function ShipmentCargoWorkspace({ shipments = [], canEdit = false }) {
     };
     loadReferences();
     return () => { mounted = false; };
-  }, []);
+  }, [hasPermission]);
 
   const loadCargo = async (shipmentId) => {
     if (!shipmentId) {
@@ -179,7 +188,7 @@ function ShipmentCargoWorkspace({ shipments = [], canEdit = false }) {
             Existing cargo lines: <strong>{loading ? "Loading..." : cargoRows.length}</strong>
           </div>
 
-          {canEdit && (
+          {canEdit && masterDataView && references.commodities.length > 0 && (
             <form onSubmit={submit}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "0 16px" }}>
                 {select("Commodity", "commodityId", references.commodities, "commodity_id", (item) => item.commodity_name || item.commodity_code)}
