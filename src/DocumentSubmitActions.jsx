@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 
 const DRAFT_STATUS_ID = 1;
@@ -13,8 +13,27 @@ export default function DocumentSubmitActions({
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [canManage, setCanManage] = useState(false);
 
-  const canManage = !authorizationLoading && hasPermission("DOCUMENT_EDIT");
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolvePermission = async () => {
+      if (authorizationLoading) {
+        if (isMounted) setCanManage(false);
+        return;
+      }
+
+      const permitted = await hasPermission("DOCUMENT_EDIT");
+      if (isMounted) setCanManage(Boolean(permitted));
+    };
+
+    resolvePermission();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authorizationLoading, hasPermission]);
 
   const openSubmit = (item) => {
     setSelected(item);
