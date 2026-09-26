@@ -184,4 +184,4 @@ GRANT EXECUTE ON FUNCTION logistics.create_shipment_cargo_classification(bigint,
 COMMENT ON FUNCTION logistics.create_shipment_cargo_classification(bigint,bigint,bigint,varchar)
 IS 'Controlled creation of a shipment cargo classification proposal. Never verifies classification.';
 
-ROLLBACK;
+COMMIT;
