@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
 
-const emptyClassificationForm = { cargoId: "", productId: "", classificationRecordId: "", sourceCode: "HUMAN_ENTERED" };
+const emptyClassificationForm = { cargoId: "", productId: "", systemId: "", editionId: "", jurisdictionId: "", classificationRecordId: "", sourceCode: "HUMAN_ENTERED" };
 
 const emptyForm = {
   commodityId: "",
@@ -265,6 +265,25 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
                 setClassificationSubmitting(false);
               }} style={{ border:"none",borderRadius:"7px",padding:"10px 14px",background:"#173b6c",color:"#fff",fontSize:"12px",fontWeight:"700" }}>{classificationSubmitting ? "Creating Proposal..." : "Create Classification Proposal"}</button>
               {classificationReferences.products.length === 0 || classificationReferences.records.length === 0 ? <div style={{ marginTop:"10px",fontSize:"11px",color:"#627d98" }}>No active classification reference records are currently available.</div> : null}
+            </div>
+          )}
+
+          {classificationRows.length > 0 && (
+            <div style={{ marginTop: "22px", overflowX: "auto" }}>
+              <h3 style={{ margin: "0 0 10px", fontSize: "15px", color: "#173b6c" }}>Classification Proposals</h3>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Cargo Line","Product","Classification","System","Edition","Jurisdiction","Status","Source"].map((heading) => <th key={heading} style={{ padding: "8px", textAlign: "left", fontSize: "10px", color: "#627d98", textTransform: "uppercase" }}>{heading}</th>)}</tr></thead>
+                <tbody>{classificationRows.map((item) => <tr key={item.shipment_cargo_classification_id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.shipment_cargo_id}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#334e68" }}>{item.product_id}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#334e68" }}>{item.classification_code_snapshot} — {item.classification_description_snapshot}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.classification_system_code_snapshot || "—"}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.classification_edition_code_snapshot || "—"}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.jurisdiction_code_snapshot || "—"}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", fontWeight: "700", color: item.status_code === "SUGGESTED" ? "#8a5a00" : "#334e68" }}>{item.status_code}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.source_code}</td>
+                </tr>)}</tbody>
+              </table>
             </div>
           )}
 
