@@ -122,6 +122,7 @@ function App() {
   const [shipmentCreateAllowed, setShipmentCreateAllowed] = useState(false);
   const [showShipmentCreate, setShowShipmentCreate] = useState(false);
   const [shipmentCreateMessage, setShipmentCreateMessage] = useState("");
+  const [shipmentRefreshKey, setShipmentRefreshKey] = useState(0);
   const [bookingData, setBookingData] = useState({ rows: [], error: "", unavailable: false });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [auditLogData, setAuditLogData] = useState({ rows: [], error: "", unavailable: false });
@@ -514,10 +515,11 @@ function App() {
     };
     loadShipmentWorkspace();
     return () => { isMounted = false; };
-  }, [isShipments, session, authorizationLoading, role, hasPermission, showShipmentCreate]);
+  }, [isShipments, session, authorizationLoading, role, hasPermission, shipmentRefreshKey]);
 
   const handleShipmentCreated = (result) => {
     setShowShipmentCreate(false);
+    setShipmentRefreshKey((current) => current + 1);
     setShipmentCreateMessage(
       `Shipment ${result.shipment_number} created successfully in DRAFT status.`
     );
