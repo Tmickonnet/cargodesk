@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
 import DocumentSubmitActions from "./DocumentSubmitActions";
+import DocumentReviewActions from "./DocumentReviewActions";
 
 const navigationGroups = [
   {
@@ -1984,6 +1985,21 @@ function App() {
                         rows: current.rows.map((row) =>
                           Number(row.document_id) === Number(documentId)
                             ? { ...row, document_status_id: 2, updated_at: new Date().toISOString() }
+                            : row
+                        ),
+                      }));
+                    }}
+                  />
+                  <DocumentReviewActions
+                    rows={documentationData.rows}
+                    authorizationLoading={authorizationLoading}
+                    hasPermission={hasPermission}
+                    onTransitioned={(documentId) => {
+                      setDocumentationData((current) => ({
+                        ...current,
+                        rows: current.rows.map((row) =>
+                          Number(row.document_id) === Number(documentId)
+                            ? { ...row, document_status_id: 3, updated_at: new Date().toISOString() }
                             : row
                         ),
                       }));
