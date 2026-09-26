@@ -27,12 +27,15 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
   const { hasPermission } = useAuthorization(true);
   const [canEdit, setCanEdit] = useState(false);
   const [masterDataView, setMasterDataView] = useState(false);
+  const [classificationVerify, setClassificationVerify] = useState(false);
   const [references, setReferences] = useState({ commodities: [], packagingTypes: [], uoms: [] });
   const [cargoRows, setCargoRows] = useState([]);
   const [classificationRows, setClassificationRows] = useState([]);
   const [classificationReferences, setClassificationReferences] = useState({ products: [], systems: [], jurisdictions: [], editions: [], records: [] });
   const [classificationForm, setClassificationForm] = useState(emptyClassificationForm);
   const [classificationSubmitting, setClassificationSubmitting] = useState(false);
+  const [classificationReviewingId, setClassificationReviewingId] = useState(null);
+  const [classificationVerifyingId, setClassificationVerifyingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [referencesLoading, setReferencesLoading] = useState(true);
@@ -50,13 +53,15 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
     let mounted = true;
     const loadReferences = async () => {
       setReferencesLoading(true);
-      const [masterView, cargoEdit] = await Promise.all([
+      const [masterView, cargoEdit, classificationVerify] = await Promise.all([
         hasPermission("MASTER_DATA_VIEW"),
         hasPermission("CARGO_EDIT"),
+        hasPermission("SHIPMENT_CLASSIFICATION_VERIFY"),
       ]);
       if (!mounted) return;
       setMasterDataView(masterView === true);
       setCanEdit(cargoEdit === true);
+      setClassificationVerify(classificationVerify === true);
       const commodityResult = masterView
         ? await supabase.from("commodities").select("commodity_id, commodity_code, commodity_name, hs_code, default_uom_id").eq("is_active", true).order("commodity_name")
         : { data: [], error: null };
@@ -181,6 +186,34 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
     await loadCargo(selectedShipmentId);
   };
 
+  const submitClassificationForReview = async (id) => {
+    setClassificationReviewingId(id);
+    setError("");
+    setMessage("");
+    const { data, error: rpcError } = await supabase.rpc("submit_shipment_cargo_classification_for_review", {
+      p_shipment_cargo_classification_id: Number(id),
+      p_reason: null,
+    });
+    if (rpcError) setError(rpcError.message || "Unable to submit classification for review.");
+    else if (!data?.success || data?.status_code !== "UNDER_REVIEW") setError("Classification review submission returned an invalid result.");
+    else { setMessage("Classification proposal submitted for review."); await loadCargo(selectedShipmentId); }
+    setClassificationReviewingId(null);
+  };
+
+  const verifyClassification = async (id) => {
+    setClassificationVerifyingId(id);
+    setError("");
+    setMessage("");
+    const { data, error: rpcError } = await supabase.rpc("verify_shipment_cargo_classification", {
+      p_shipment_cargo_classification_id: Number(id),
+      p_reason: null,
+    });
+    if (rpcError) setError(rpcError.message || "Unable to verify classification.");
+    else if (!data?.success || data?.status_code !== "VERIFIED") setError("Classification verification returned an invalid result.");
+    else { setMessage("Classification verified successfully."); await loadCargo(selectedShipmentId); }
+    setClassificationVerifyingId(null);
+  };
+
   const inputStyle = { width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e0", borderRadius: "7px", padding: "9px 10px", fontSize: "12px", color: "#172033", background: "#ffffff" };
   const labelStyle = { display: "block", marginBottom: "5px", fontSize: "11px", fontWeight: "600", color: "#334e68" };
   const fieldStyle = { marginBottom: "13px" };
@@ -272,7 +305,7 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
             <div style={{ marginTop: "22px", overflowX: "auto" }}>
               <h3 style={{ margin: "0 0 10px", fontSize: "15px", color: "#173b6c" }}>Classification Proposals</h3>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
-                <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Cargo Line","Product","Classification","System","Edition","Jurisdiction","Status","Source"].map((heading) => <th key={heading} style={{ padding: "8px", textAlign: "left", fontSize: "10px", color: "#627d98", textTransform: "uppercase" }}>{heading}</th>)}</tr></thead>
+                <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Cargo Line","Product","Classification","System","Edition","Jurisdiction","Status","Source","Actions"].map((heading) => <th key={heading} style={{ padding: "8px", textAlign: "left", fontSize: "10px", color: "#627d98", textTransform: "uppercase" }}>{heading}</th>)}</tr></thead>
                 <tbody>{classificationRows.map((item) => <tr key={item.shipment_cargo_classification_id} style={{ borderBottom: "1px solid #eef2f7" }}>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.shipment_cargo_id}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#334e68" }}>{item.product_id}</td>
@@ -281,7 +314,19 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.classification_edition_code_snapshot || "—"}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.jurisdiction_code_snapshot || "—"}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", fontWeight: "700", color: item.status_code === "SUGGESTED" ? "#8a5a00" : "#334e68" }}>{item.status_code}</td>
-                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.source_code}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98", whiteSpace: "nowrap" }}>
+                    {item.status_code === "SUGGESTED" && canEdit && (
+                      <button type="button" onClick={() => submitClassificationForReview(item.shipment_cargo_classification_id)} disabled={classificationReviewingId === item.shipment_cargo_classification_id} style={{ marginRight: "6px", border: "1px solid #cbd5e0", borderRadius: "6px", padding: "6px 8px", background: "#fff", color: "#334e68", fontSize: "10px", fontWeight: "700" }}>
+                        {classificationReviewingId === item.shipment_cargo_classification_id ? "Submitting..." : "Submit Review"}
+                      </button>
+                    )}
+                    {item.status_code === "UNDER_REVIEW" && classificationVerify && (
+                      <button type="button" onClick={() => verifyClassification(item.shipment_cargo_classification_id)} disabled={classificationVerifyingId === item.shipment_cargo_classification_id} style={{ border: "none", borderRadius: "6px", padding: "6px 8px", background: "#173b6c", color: "#fff", fontSize: "10px", fontWeight: "700" }}>
+                        {classificationVerifyingId === item.shipment_cargo_classification_id ? "Verifying..." : "Verify"}
+                      </button>
+                    )}
+                    {item.status_code === "VERIFIED" && <span style={{ fontSize: "10px", fontWeight: "700" }}>Verified</span>}
+                  </td>
                 </tr>)}</tbody>
               </table>
             </div>
