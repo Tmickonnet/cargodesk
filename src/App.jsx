@@ -5,6 +5,7 @@ import DocumentSubmitActions from "./DocumentSubmitActions";
 import DocumentReviewActions from "./DocumentReviewActions";
 import ExceptionsWorkspace from "./ExceptionsWorkspace";
 import CreateShipmentForm from "./CreateShipmentForm";
+import ShipmentCargoWorkspace from "./ShipmentCargoWorkspace";
 
 const navigationGroups = [
   {
@@ -2126,6 +2127,7 @@ function App() {
                   {bookingData.rows.length === 0 ? <div style={{ color: "#627d98", fontSize: "13px" }}>No booking records are available through the authorized read path.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1200px" }}><thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Booking", "Shipment ID", "Status ID", "Booking Date", "Requested ETD", "Confirmed ETD", "Requested ETA", "Confirmed ETA", "Voyage", "Freight Terms", "Carrier Reference"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead><tbody>{bookingData.rows.map((item) => <tr key={item.booking_id} style={{ borderBottom: "1px solid #eef2f7" }}><td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.booking_number || ("Booking " + item.booking_id)}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.booking_status_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.booking_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.requested_etd || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.confirmed_etd || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.requested_eta || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.confirmed_eta || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.voyage_number || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.freight_terms || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.carrier_reference || "—"}</td></tr>)}</tbody></table>}
                 </section>}
               </div>
+            <ShipmentCargoWorkspace shipments={shipmentData.rows} />
             </>
           ) : isWarehouse ? (
             <>
