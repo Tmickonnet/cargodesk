@@ -167,20 +167,42 @@ export default function ExceptionsWorkspace({
         return;
       }
 
+      const refreshed = await supabase
+        .from("shipment_exception")
+        .select(exceptionSelect)
+        .eq("shipment_exception_id", exceptionId)
+        .maybeSingle();
+
+      if (refreshed.error || !refreshed.data) {
+        setRows((current) =>
+          current.map((row) =>
+            Number(row.shipment_exception_id) === exceptionId
+              ? {
+                  ...row,
+                  status: "RESOLVED",
+                  corrective_action: cleanCorrectiveAction,
+                  remarks: cleanRemarks || null,
+                }
+              : row
+          )
+        );
+        setSuccessMessage(
+          `Exception ${data.exception_reference || selected.exception_reference} was resolved, but the refreshed record could not be loaded.`
+        );
+        closeResolution();
+        return;
+      }
+
       setRows((current) =>
         current.map((row) =>
           Number(row.shipment_exception_id) === exceptionId
-            ? {
-                ...row,
-                status: "RESOLVED",
-                resolved_at: new Date().toISOString(),
-                corrective_action: cleanCorrectiveAction,
-                remarks: cleanRemarks || null,
-              }
+            ? refreshed.data
             : row
         )
       );
-      setSuccessMessage(`Exception ${data.exception_reference || selected.exception_reference} resolved successfully.`);
+      setSuccessMessage(
+        `Exception ${data.exception_reference || selected.exception_reference} resolved successfully.`
+      );
       closeResolution();
     } catch (rpcFailure) {
       setSubmitError(rpcFailure.message || "Exception resolution was rejected.");
