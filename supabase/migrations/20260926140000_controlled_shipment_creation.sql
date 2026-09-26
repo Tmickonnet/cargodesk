@@ -2,7 +2,9 @@
 -- Scope:
 --   - Adds one narrowly scoped shipment-creation RPC.
 --   - No table, column, role, permission, RLS policy, trigger, index, storage,
---     or direct authenticated table-grant changes.
+--     or shipment write-grant changes.
+--   - Reference-data SELECT privileges used by the form are maintained separately
+--     by the controlled reference-data SELECT privilege migration.
 --   - Initial status is always DRAFT.
 --   - Shipment number is generated server-side under a transaction advisory lock.
 --   - Shipment creation and its audit entry occur in one transaction.
