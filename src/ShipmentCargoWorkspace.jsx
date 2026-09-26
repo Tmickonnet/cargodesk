@@ -308,12 +308,13 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
                 <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Cargo Line","Product","Classification","System","Edition","Jurisdiction","Status","Source","Actions"].map((heading) => <th key={heading} style={{ padding: "8px", textAlign: "left", fontSize: "10px", color: "#627d98", textTransform: "uppercase" }}>{heading}</th>)}</tr></thead>
                 <tbody>{classificationRows.map((item) => <tr key={item.shipment_cargo_classification_id} style={{ borderBottom: "1px solid #eef2f7" }}>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.shipment_cargo_id}</td>
-                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#334e68" }}>{item.product_id}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#334e68" }}>{classificationReferences.products.find((product) => Number(product.product_id) === Number(item.product_id))?.product_name || item.product_id}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#334e68" }}>{item.classification_code_snapshot} — {item.classification_description_snapshot}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.classification_system_code_snapshot || "—"}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.classification_edition_code_snapshot || "—"}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.jurisdiction_code_snapshot || "—"}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", fontWeight: "700", color: item.status_code === "SUGGESTED" ? "#8a5a00" : "#334e68" }}>{item.status_code}</td>
+                  <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98" }}>{item.source_code || "—"}</td>
                   <td style={{ padding: "9px 8px", fontSize: "11px", color: "#627d98", whiteSpace: "nowrap" }}>
                     {item.status_code === "SUGGESTED" && canEdit && (
                       <button type="button" onClick={() => submitClassificationForReview(item.shipment_cargo_classification_id)} disabled={classificationReviewingId === item.shipment_cargo_classification_id} style={{ marginRight: "6px", border: "1px solid #cbd5e0", borderRadius: "6px", padding: "6px 8px", background: "#fff", color: "#334e68", fontSize: "10px", fontWeight: "700" }}>
