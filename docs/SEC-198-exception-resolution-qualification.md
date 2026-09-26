@@ -27,7 +27,7 @@ The production database already provides `logistics.resolve_exception(bigint, te
 
 The established contract requires authentication, an active CargoDesk user, and `EXCEPTION_MANAGE`; permits only `OPEN → RESOLVED`; requires non-blank corrective action (maximum 4000 characters); permits optional remarks (maximum 4000 characters); and performs the exception update and `EXCEPTION_RESOLVED` audit insertion atomically.
 
-The frontend must call only `supabase.rpc("resolve_exception", { p_exception_id, p_corrective_action, p_remarks })`.
+The frontend must call only `supabase.rpc("resolve_exception", { p_exception_id, p_corrective_action, p_remarks })`. After a successful mutation, the frontend refreshes the affected exception through the existing authorized read path rather than fabricating `resolved_at` or `updated_at` locally. The production function returns success/status/reference but does not return authoritative timestamps.
 
 The database remains authoritative.
 
@@ -67,8 +67,14 @@ SEC-198 does not authorize:
 - unrelated mutation workflows;
 - changes to SEC-197 or SEC-202.
 
+## Additional verification finding
+
+The initial reconciled frontend locally synthesized `resolved_at` after a successful RPC. Live inspection of `logistics.resolve_exception(bigint,text,text)` confirmed that the production function returns JSONB containing success, exception ID, reference, and status, but not authoritative timestamps. Because the database sets `resolved_at` and `updated_at` with `clock_timestamp()`, local timestamp synthesis could display a state that was not the authoritative database value. This was corrected before merge by refreshing the affected exception through the existing authorized SELECT path after successful resolution.
+
+Live security inspection also confirmed that `shipment_exception` has RLS enabled, its SELECT policy requires `EXCEPTION_VIEW`, its UPDATE policy requires `EXCEPTION_MANAGE`, and the table ACL grants `authenticated` SELECT only. Direct authenticated table UPDATE is therefore not available through the table grant path; the controlled RPC remains the mutation path.
+
 ## Current status
 
-**RECONCILED → PENDING BUILD/PREVIEW/AUTHENTICATED VERIFICATION**
+**RECONCILED → CORRECTED → PENDING FRESH PREVIEW/BUILD VERIFICATION**
 
 No production database mutation has been performed by this reconciliation.
