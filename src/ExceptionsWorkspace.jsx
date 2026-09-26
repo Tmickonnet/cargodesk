@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
-import { useAuthorization } from "./auth/useAuthorization";
 
 const exceptionSelect =
   "shipment_exception_id, shipment_id, container_id, shipment_leg_id, exception_reference, exception_type, severity, reported_at, resolved_at, description, corrective_action, status, resolved_by, remarks, updated_at";
 
 const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : "—");
 
-export default function ExceptionsWorkspace({ session }) {
-  const { role, loading: authorizationLoading, hasPermission } =
-    useAuthorization(Boolean(session));
+export default function ExceptionsWorkspace({
+  session,
+  role,
+  authorizationLoading,
+  hasPermission,
+}) {
 
   const [canView, setCanView] = useState(false);
   const [canManage, setCanManage] = useState(false);
