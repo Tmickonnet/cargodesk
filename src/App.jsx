@@ -1986,7 +1986,7 @@ function App() {
                 <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>
                   ← Back to Dashboard
                 </button>
-                <ExceptionsWorkspace session={session} />
+                <ExceptionsWorkspace\n                  session={session}\n                  role={role}\n                  authorizationLoading={authorizationLoading}\n                  hasPermission={hasPermission}\n                />
               </div>
             </>
           ) : isDelivery ? (
