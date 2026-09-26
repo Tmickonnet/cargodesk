@@ -3,6 +3,7 @@ import { supabase } from "./lib/supabase";
 import { useAuthorization } from "./auth/useAuthorization";
 import DocumentSubmitActions from "./DocumentSubmitActions";
 import DocumentReviewActions from "./DocumentReviewActions";
+import ExceptionsWorkspace from "./ExceptionsWorkspace";
 
 const navigationGroups = [
   {
@@ -15,6 +16,7 @@ const navigationGroups = [
       "Warehouse",
       "Shipping",
       "Delivery",
+      "Exceptions",
     ],
   },
   {
@@ -31,6 +33,7 @@ const navigationPermissions = {
   Warehouse: "OPERATIONS_VIEW",
   Shipping: "BOOKING_VIEW",
   Delivery: "DELIVERY_VIEW",
+  Exceptions: "EXCEPTION_VIEW",
   Reports: "OPERATIONS_VIEW",
   "Audit Log": "AUDIT_VIEW",
   Settings: "SYSTEM_CONFIG",
@@ -327,6 +330,7 @@ function App() {
   const isDocumentation = activePage === "Documentation";
   const isContainers = activePage === "Containers";
   const isDelivery = activePage === "Delivery";
+  const isExceptions = activePage === "Exceptions";
 
 
   useEffect(() => {
@@ -2013,6 +2017,18 @@ function App() {
                     }}
                   />                  </section>
                 )}
+              </div>
+            </>
+          ) : isExceptions ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>← Back to Dashboard</button>
+                <ExceptionsWorkspace
+                  session={session}
+                  role={role}
+                  authorizationLoading={authorizationLoading}
+                  hasPermission={hasPermission}
+                />
               </div>
             </>
           ) : isDelivery ? (
