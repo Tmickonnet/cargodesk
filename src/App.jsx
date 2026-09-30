@@ -9,6 +9,7 @@ import ShipmentCargoWorkspace from "./ShipmentCargoWorkspace";
 import ProductClassificationWorkspace from "./ProductClassificationWorkspace";
 import ContainerSearchPreview from "./ContainerSearchPreview";
 import GlobalSearchWorkspace from "./GlobalSearchWorkspace";
+import DocumentUploadWorkspace from "./DocumentUploadWorkspace";
 
 const navigationGroups = [
   {
@@ -2099,6 +2100,40 @@ function App() {
                         </tbody>
                       </table>
                     )}
+
+                  <DocumentUploadWorkspace
+                    authorizationLoading={authorizationLoading}
+                    hasPermission={hasPermission}
+                    onCreated={async () => {
+                      const result = await supabase
+                        .from("documents")
+                        .select("document_id, document_number, document_title, document_type_id, document_status_id, file_name, version_number, is_current_version, uploaded_by, uploaded_at, expiry_date, updated_at")
+                        .order("updated_at", { ascending: false, nullsFirst: false })
+                        .limit(25);
+                      if (result.error) return;
+                      const documentIds = (result.data ?? []).map((item) => item.document_id).filter((id) => id != null);
+                      if (documentIds.length === 0) {
+                        setDocumentationData({ rows: [], error: "", unavailable: false });
+                        return;
+                      }
+                      const linksResult = await supabase
+                        .from("shipment_documents")
+                        .select("document_id, shipment_id, is_primary")
+                        .in("document_id", documentIds);
+                      if (linksResult.error) return;
+                      const shipmentByDocument = new Map(
+                        (linksResult.data ?? []).map((link) => [Number(link.document_id), link])
+                      );
+                      setDocumentationData({
+                        rows: (result.data ?? []).map((item) => ({
+                          ...item,
+                          shipmentLink: shipmentByDocument.get(Number(item.document_id)) ?? null,
+                        })),
+                        error: "",
+                        unavailable: false,
+                      });
+                    }}
+                  />
 
                   <DocumentSubmitActions
                     rows={documentationData.rows}
