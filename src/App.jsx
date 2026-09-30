@@ -1681,7 +1681,7 @@ function App() {
                   "Stock Locations": "Warehouse",
                 };
                 const targetPage = pageByType[result?.type];
-                if (targetPage) {
+                if (targetPage && allowedNavigation[targetPage] === true) {
                   handleNavigation(targetPage);
                   setShowGlobalSearch(false);
                 }
