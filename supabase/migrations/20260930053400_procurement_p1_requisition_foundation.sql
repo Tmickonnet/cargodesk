@@ -408,7 +408,7 @@ RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'logistics', 'pg_catalog'
-AS $
+AS $$
 DECLARE
   v_user_id bigint;
   v_status_code varchar(50);
@@ -463,7 +463,7 @@ BEGIN
   RETURN jsonb_build_object('success',true,'purchase_requisition_line_id',v_line_id,
     'purchase_requisition_id',p_purchase_requisition_id,'line_number',v_line_number);
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION logistics.review_purchase_requisition(
   p_purchase_requisition_id bigint
@@ -472,7 +472,7 @@ RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'logistics', 'pg_catalog'
-AS $
+AS $$
 DECLARE
   v_user_id bigint;
   v_row logistics.purchase_requisitions%ROWTYPE;
@@ -522,7 +522,7 @@ BEGIN
   RETURN jsonb_build_object('success',true,'purchase_requisition_id',p_purchase_requisition_id,
     'requisition_number',v_row.requisition_number,'status_code','UNDER_REVIEW');
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION logistics.create_purchase_requisition_line(bigint,bigint,bigint,varchar,numeric,bigint,numeric,numeric,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION logistics.create_purchase_requisition_line(bigint,bigint,bigint,varchar,numeric,bigint,numeric,numeric,text) FROM anon;
