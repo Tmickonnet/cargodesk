@@ -1667,7 +1667,25 @@ function App() {
           {showGlobalSearch && (
             <GlobalSearchWorkspace
               hasPermission={hasPermission}
-              onNavigate={() => {}}
+              onNavigate={(result) => {
+                const pageByType = {
+                  Shipments: "Shipments",
+                  Cargo: "Shipments",
+                  Containers: "Containers",
+                  Bookings: "Shipping",
+                  Warehouses: "Warehouse",
+                  Deliveries: "Delivery",
+                  Documents: "Documentation",
+                  Exceptions: "Exceptions",
+                  "Inventory Lots": "Warehouse",
+                  "Stock Locations": "Warehouse",
+                };
+                const targetPage = pageByType[result?.type];
+                if (targetPage) {
+                  handleNavigation(targetPage);
+                  setShowGlobalSearch(false);
+                }
+              }}
             />
           )}
           {!hasAccessibleModule ? (
