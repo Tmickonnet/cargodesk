@@ -5,6 +5,7 @@ BEGIN;
 CREATE SEQUENCE logistics.purchase_requisition_statuses_purchase_requisition_status_id_seq;
 CREATE SEQUENCE logistics.purchase_requisitions_purchase_requisition_id_seq;
 CREATE SEQUENCE logistics.purchase_requisition_lines_purchase_requisition_line_id_seq;
+CREATE SEQUENCE logistics.purchase_requisition_number_seq;
 
 CREATE TABLE logistics.purchase_requisition_statuses (
   purchase_requisition_status_id bigint NOT NULL DEFAULT nextval('logistics.purchase_requisition_statuses_purchase_requisition_status_id_seq'),
@@ -227,7 +228,7 @@ BEGIN
     RAISE EXCEPTION 'Active DRAFT requisition status is not configured';
   END IF;
 
-  v_number := 'PR-' || to_char(v_now, 'YYYYMMDDHH24MISSMS') || '-' || v_user_id;
+  v_number := 'PR-' || to_char(v_now, 'YYYYMMDD') || '-' || lpad(nextval('logistics.purchase_requisition_number_seq')::text, 8, '0');
 
   INSERT INTO logistics.purchase_requisitions (
     requisition_number, requester_user_id, warehouse_id, stock_location_id,
@@ -283,13 +284,16 @@ BEGIN
     RAISE EXCEPTION 'Permission denied: PROCUREMENT_SUBMIT';
   END IF;
 
-  SELECT pr.*, s.status_code
-  INTO v_row, v_status_code
+  SELECT pr.*
+  INTO v_row
   FROM logistics.purchase_requisitions pr
-  JOIN logistics.purchase_requisition_statuses s
-    ON s.purchase_requisition_status_id = pr.status_id
   WHERE pr.purchase_requisition_id = p_purchase_requisition_id
   FOR UPDATE;
+
+  SELECT s.status_code
+  INTO v_status_code
+  FROM logistics.purchase_requisition_statuses s
+  WHERE s.purchase_requisition_status_id = v_row.status_id;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'Purchase requisition not found'; END IF;
   IF v_status_code <> 'DRAFT' THEN
@@ -349,13 +353,16 @@ BEGIN
     RAISE EXCEPTION 'Permission denied: PROCUREMENT_APPROVE';
   END IF;
 
-  SELECT pr.*, s.status_code
-  INTO v_row, v_status_code
+  SELECT pr.*
+  INTO v_row
   FROM logistics.purchase_requisitions pr
-  JOIN logistics.purchase_requisition_statuses s
-    ON s.purchase_requisition_status_id = pr.status_id
   WHERE pr.purchase_requisition_id = p_purchase_requisition_id
   FOR UPDATE;
+
+  SELECT s.status_code
+  INTO v_status_code
+  FROM logistics.purchase_requisition_statuses s
+  WHERE s.purchase_requisition_status_id = v_row.status_id;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'Purchase requisition not found'; END IF;
   IF v_status_code <> 'UNDER_REVIEW' THEN
@@ -387,6 +394,145 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION logistics.create_purchase_requisition_line(
+  p_purchase_requisition_id bigint,
+  p_product_id bigint DEFAULT NULL,
+  p_commodity_id bigint DEFAULT NULL,
+  p_description varchar DEFAULT NULL,
+  p_quantity numeric DEFAULT NULL,
+  p_uom_id bigint DEFAULT NULL,
+  p_estimated_unit_price numeric DEFAULT NULL,
+  p_estimated_line_amount numeric DEFAULT NULL,
+  p_remarks text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'logistics', 'pg_catalog'
+AS $
+DECLARE
+  v_user_id bigint;
+  v_status_code varchar(50);
+  v_line_id bigint;
+  v_line_number integer;
+  v_now timestamptz := now();
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  v_user_id := logistics.current_user_id();
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Application user context could not be resolved'; END IF;
+  IF NOT logistics.has_permission('PROCUREMENT_CREATE') THEN
+    RAISE EXCEPTION 'Permission denied: PROCUREMENT_CREATE';
+  END IF;
+  IF p_product_id IS NULL AND p_commodity_id IS NULL THEN
+    RAISE EXCEPTION 'Product or commodity is required';
+  END IF;
+  IF p_quantity IS NULL OR p_quantity <= 0 THEN RAISE EXCEPTION 'Quantity must be greater than zero'; END IF;
+  IF p_uom_id IS NULL THEN RAISE EXCEPTION 'Unit of measure is required'; END IF;
+  IF NULLIF(trim(coalesce(p_description,'')), '') IS NULL THEN RAISE EXCEPTION 'Description is required'; END IF;
+
+  SELECT s.status_code INTO v_status_code
+  FROM logistics.purchase_requisitions pr
+  JOIN logistics.purchase_requisition_statuses s ON s.purchase_requisition_status_id = pr.status_id
+  WHERE pr.purchase_requisition_id = p_purchase_requisition_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN RAISE EXCEPTION 'Purchase requisition not found'; END IF;
+  IF v_status_code <> 'DRAFT' THEN RAISE EXCEPTION 'Lines can only be added while requisition is DRAFT'; END IF;
+
+  SELECT coalesce(max(line_number),0) + 1 INTO v_line_number
+  FROM logistics.purchase_requisition_lines
+  WHERE purchase_requisition_id = p_purchase_requisition_id;
+
+  INSERT INTO logistics.purchase_requisition_lines (
+    purchase_requisition_id,line_number,product_id,commodity_id,description,quantity,uom_id,
+    estimated_unit_price,estimated_line_amount,remarks,created_at,updated_at
+  ) VALUES (
+    p_purchase_requisition_id,v_line_number,p_product_id,p_commodity_id,trim(p_description),
+    p_quantity,p_uom_id,p_estimated_unit_price,p_estimated_line_amount,p_remarks,v_now,v_now
+  ) RETURNING purchase_requisition_line_id INTO v_line_id;
+
+  INSERT INTO logistics.audit_log (
+    user_id,action_type,table_name,record_id,record_reference,action_timestamp,
+    old_values,new_values,description
+  ) VALUES (
+    v_user_id,'PURCHASE_REQUISITION_LINE_CREATED','purchase_requisition_lines',
+    v_line_id,'PR-LINE-'||v_line_id,v_now,NULL,
+    jsonb_build_object('purchase_requisition_id',p_purchase_requisition_id,'line_number',v_line_number),
+    'Purchase requisition line created through controlled procurement workflow.'
+  );
+
+  RETURN jsonb_build_object('success',true,'purchase_requisition_line_id',v_line_id,
+    'purchase_requisition_id',p_purchase_requisition_id,'line_number',v_line_number);
+END;
+$;
+
+CREATE OR REPLACE FUNCTION logistics.review_purchase_requisition(
+  p_purchase_requisition_id bigint
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'logistics', 'pg_catalog'
+AS $
+DECLARE
+  v_user_id bigint;
+  v_row logistics.purchase_requisitions%ROWTYPE;
+  v_status_code varchar(50);
+  v_review_status_id bigint;
+  v_now timestamptz := now();
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  v_user_id := logistics.current_user_id();
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Application user context could not be resolved'; END IF;
+  IF NOT logistics.has_permission('PROCUREMENT_APPROVE') THEN
+    RAISE EXCEPTION 'Permission denied: PROCUREMENT_APPROVE';
+  END IF;
+
+  SELECT pr.* INTO v_row
+  FROM logistics.purchase_requisitions pr
+  WHERE pr.purchase_requisition_id = p_purchase_requisition_id
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Purchase requisition not found'; END IF;
+
+  SELECT s.status_code INTO v_status_code
+  FROM logistics.purchase_requisition_statuses s
+  WHERE s.purchase_requisition_status_id = v_row.status_id;
+  IF v_status_code <> 'SUBMITTED' THEN
+    RAISE EXCEPTION 'Only SUBMITTED requisitions can enter review';
+  END IF;
+
+  SELECT purchase_requisition_status_id INTO v_review_status_id
+  FROM logistics.purchase_requisition_statuses
+  WHERE status_code = 'UNDER_REVIEW' AND is_active = true;
+
+  UPDATE logistics.purchase_requisitions
+  SET status_id=v_review_status_id, updated_at=v_now
+  WHERE purchase_requisition_id=p_purchase_requisition_id;
+
+  INSERT INTO logistics.audit_log (
+    user_id,action_type,table_name,record_id,record_reference,action_timestamp,
+    old_values,new_values,description
+  ) VALUES (
+    v_user_id,'PURCHASE_REQUISITION_REVIEW_STARTED','purchase_requisitions',
+    p_purchase_requisition_id,v_row.requisition_number,v_now,
+    jsonb_build_object('status_code','SUBMITTED'),
+    jsonb_build_object('status_code','UNDER_REVIEW'),
+    'Purchase requisition entered controlled review.'
+  );
+
+  RETURN jsonb_build_object('success',true,'purchase_requisition_id',p_purchase_requisition_id,
+    'requisition_number',v_row.requisition_number,'status_code','UNDER_REVIEW');
+END;
+$;
+
+REVOKE ALL ON FUNCTION logistics.create_purchase_requisition_line(bigint,bigint,bigint,varchar,numeric,bigint,numeric,numeric,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION logistics.create_purchase_requisition_line(bigint,bigint,bigint,varchar,numeric,bigint,numeric,numeric,text) FROM anon;
+GRANT EXECUTE ON FUNCTION logistics.create_purchase_requisition_line(bigint,bigint,bigint,varchar,numeric,bigint,numeric,numeric,text) TO authenticated;
+
+REVOKE ALL ON FUNCTION logistics.review_purchase_requisition(bigint) FROM PUBLIC;
+REVOKE ALL ON FUNCTION logistics.review_purchase_requisition(bigint) FROM anon;
+GRANT EXECUTE ON FUNCTION logistics.review_purchase_requisition(bigint) TO authenticated;
+
 REVOKE ALL ON FUNCTION logistics.create_purchase_requisition(bigint,bigint,date,varchar,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION logistics.create_purchase_requisition(bigint,bigint,date,varchar,text) FROM anon;
 GRANT EXECUTE ON FUNCTION logistics.create_purchase_requisition(bigint,bigint,date,varchar,text) TO authenticated;
@@ -403,6 +549,10 @@ COMMENT ON TABLE logistics.purchase_requisitions IS
   'Procurement P1 purchase requisition header. Does not create purchase orders or inventory movements.';
 COMMENT ON TABLE logistics.purchase_requisition_lines IS
   'Procurement P1 purchase requisition lines. Inventory is not posted from this structure.';
+COMMENT ON FUNCTION logistics.create_purchase_requisition_line(bigint,bigint,bigint,varchar,numeric,bigint,numeric,numeric,text)
+IS 'Controlled creation of a purchase requisition line while the requisition is DRAFT.';
+COMMENT ON FUNCTION logistics.review_purchase_requisition(bigint)
+IS 'Controlled transition of a SUBMITTED purchase requisition into UNDER_REVIEW.';
 COMMENT ON FUNCTION logistics.create_purchase_requisition(bigint,bigint,date,varchar,text)
 IS 'Controlled creation of a purchase requisition in DRAFT status.';
 COMMENT ON FUNCTION logistics.submit_purchase_requisition(bigint)
