@@ -8,6 +8,7 @@ import CreateShipmentForm from "./CreateShipmentForm";
 import ShipmentCargoWorkspace from "./ShipmentCargoWorkspace";
 import ProductClassificationWorkspace from "./ProductClassificationWorkspace";
 import ContainerSearchPreview from "./ContainerSearchPreview";
+import GlobalSearchWorkspace from "./GlobalSearchWorkspace";
 
 const navigationGroups = [
   {
@@ -89,6 +90,7 @@ const dashboardCards = [
 
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -1481,6 +1483,23 @@ function App() {
             gap: "12px",
           }}
         >
+          <button
+            type="button"
+            onClick={() => setShowGlobalSearch((current) => !current)}
+            style={{
+              border: "1px solid #bcccdc",
+              borderRadius: "7px",
+              padding: "8px 11px",
+              background: "#ffffff",
+              color: "#173b6c",
+              fontSize: "11px",
+              fontWeight: "700",
+              cursor: "pointer",
+            }}
+          >
+            {showGlobalSearch ? "Close Search" : "Global Search"}
+          </button>
+
           <div
             style={{
               padding: "7px 11px",
@@ -1645,6 +1664,12 @@ function App() {
             minWidth: 0,
           }}
         >
+          {showGlobalSearch && (
+            <GlobalSearchWorkspace
+              hasPermission={hasPermission}
+              onNavigate={() => {}}
+            />
+          )}
           {!hasAccessibleModule ? (
             <section
               style={{
