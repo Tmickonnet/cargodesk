@@ -1703,7 +1703,51 @@ function App() {
               }}
             />
           )}
-          {!hasAccessibleModule ? (
+          {!isNavigationReady ? (
+            <section
+              style={{
+                background: "#ffffff",
+                border: "1px solid #d9e2ec",
+                borderRadius: "12px",
+                padding: "28px",
+                boxShadow: "0 2px 8px rgba(16,42,67,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  color: "#627d98",
+                  marginBottom: "10px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.7px",
+                }}
+              >
+                Verifying authorized modules
+              </div>
+              <h1
+                style={{
+                  margin: "0 0 10px",
+                  fontSize: "24px",
+                  color: "#173b6c",
+                }}
+              >
+                Loading authorized access
+              </h1>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#627d98",
+                  fontSize: "14px",
+                  lineHeight: 1.7,
+                }}
+              >
+                CargoDesk is completing the permission checks for the
+                authenticated account. No module access decision has been
+                made yet.
+              </p>
+            </section>
+          ) : !hasAccessibleModule ? (
             <section
               style={{
                 background: "#ffffff",
