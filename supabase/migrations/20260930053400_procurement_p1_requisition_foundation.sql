@@ -119,7 +119,6 @@ SELECT v.permission_code, v.permission_name, 'PROCUREMENT', v.action_name, true
 FROM (VALUES
   ('PROCUREMENT_VIEW', 'View procurement requisitions', 'VIEW'),
   ('PROCUREMENT_CREATE', 'Create purchase requisitions', 'CREATE'),
-  ('PROCUREMENT_EDIT', 'Edit purchase requisitions', 'EDIT'),
   ('PROCUREMENT_SUBMIT', 'Submit purchase requisitions', 'SUBMIT'),
   ('PROCUREMENT_APPROVE', 'Approve purchase requisitions', 'APPROVE')
 ) AS v(permission_code, permission_name, action_name)
@@ -131,7 +130,7 @@ INSERT INTO logistics.role_permissions (role_id, permission_id, granted)
 SELECT r.role_id, p.permission_id, true
 FROM logistics.roles r
 JOIN logistics.permissions p ON p.permission_code IN (
-  'PROCUREMENT_VIEW','PROCUREMENT_CREATE','PROCUREMENT_EDIT','PROCUREMENT_SUBMIT','PROCUREMENT_APPROVE'
+  'PROCUREMENT_VIEW','PROCUREMENT_CREATE','PROCUREMENT_SUBMIT','PROCUREMENT_APPROVE'
 )
 WHERE r.role_code IN ('SYSTEM_ADMIN','LOGISTICS_ADMIN')
   AND NOT EXISTS (
@@ -143,7 +142,7 @@ INSERT INTO logistics.role_permissions (role_id, permission_id, granted)
 SELECT r.role_id, p.permission_id, true
 FROM logistics.roles r
 JOIN logistics.permissions p ON p.permission_code IN (
-  'PROCUREMENT_VIEW','PROCUREMENT_CREATE','PROCUREMENT_EDIT','PROCUREMENT_SUBMIT'
+  'PROCUREMENT_VIEW','PROCUREMENT_CREATE','PROCUREMENT_SUBMIT'
 )
 WHERE r.role_code = 'DATA_ENTRY_OFFICER'
   AND NOT EXISTS (
