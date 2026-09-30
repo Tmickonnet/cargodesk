@@ -79,7 +79,7 @@ function ProductClassificationWorkspace() {
             <div style={card}><div style={label}>Product Mappings</div><div style={value}>{productMappings.length}</div></div>
           </div>
           <div style={{ color: "#627d98", fontSize: "12px" }}>
-            No reference records have been created yet. This workspace intentionally provides read-only visibility until authoritative master-data administration is separately approved.
+            Reference data is available for read-only inspection. This workspace intentionally provides visibility only; authoritative master-data administration remains separately controlled.
           </div>
         </>
       )}
