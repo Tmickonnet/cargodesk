@@ -10,6 +10,7 @@ import ProductClassificationWorkspace from "./ProductClassificationWorkspace";
 import ContainerSearchPreview from "./ContainerSearchPreview";
 import GlobalSearchWorkspace from "./GlobalSearchWorkspace";
 import DocumentUploadWorkspace from "./DocumentUploadWorkspace";
+import ProcurementWorkspace from "./ProcurementWorkspace";
 
 const navigationGroups = [
   {
@@ -27,7 +28,7 @@ const navigationGroups = [
   },
   {
     title: "Management",
-    items: ["Reports", "Audit Log", "Settings"],
+    items: ["Procurement", "Reports", "Audit Log", "Settings"],
   },
 ];
 
@@ -40,12 +41,15 @@ const navigationPermissions = {
   Shipping: "BOOKING_VIEW",
   Delivery: "DELIVERY_VIEW",
   Exceptions: "EXCEPTION_VIEW",
+  Procurement: "PROCUREMENT_VIEW",
   Reports: "OPERATIONS_VIEW",
   "Audit Log": "AUDIT_VIEW",
   Settings: "SYSTEM_CONFIG",
 };
 
 const moduleDescriptions = {
+  Procurement:
+    "Review purchase requisitions through the authorized procurement read path. P1 does not yet include RFQs, quotations, purchase orders, receipts, or inventory posting.",
   Shipments:
     "Create, monitor, track, and manage shipment activities from booking through final delivery.",
   Documentation:
@@ -343,6 +347,7 @@ function App() {
   const isContainers = activePage === "Containers";
   const isDelivery = activePage === "Delivery";
   const isExceptions = activePage === "Exceptions";
+  const isProcurement = activePage === "Procurement";
 
 
   useEffect(() => {
@@ -2001,6 +2006,18 @@ function App() {
                     )}
                   </section>
                 )}
+              </div>
+            </>
+          ) : isProcurement ? (
+            <>
+              <div style={{ marginBottom: "22px" }}>
+                <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>← Back to Dashboard</button>
+                <ProcurementWorkspace
+                  session={session}
+                  authorizationLoading={authorizationLoading}
+                  role={role}
+                  hasPermission={hasPermission}
+                />
               </div>
             </>
           ) : isReports ? (
