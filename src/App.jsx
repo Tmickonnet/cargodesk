@@ -678,7 +678,7 @@ function App() {
           supabase.from("containers").select("container_id, container_number, container_type_id, owner_shipping_line_id, tare_weight, maximum_gross_weight, container_status, updated_at").order("updated_at", { ascending: false, nullsFirst: false }).limit(25),
           supabase.from("shipment_container").select("shipment_container_id, shipment_id, container_id, booking_id, container_sequence, seal_number, container_status").order("updated_at", { ascending: false, nullsFirst: false }).limit(25),
           supabase.from("container_vgm").select("container_vgm_id, shipment_id, container_id, vgm_reference, vgm_weight, weight_uom_id, verification_status_id, submitted_to_carrier_at").order("updated_at", { ascending: false, nullsFirst: false }).limit(25),
-          Promise.resolve({ data: [], error: null }),
+          supabase.from("container_cargo_allocation").select("container_cargo_allocation_id, shipment_container_id, shipment_cargo_id, allocated_quantity, quantity_uom_id, allocated_net_weight, allocated_gross_weight, weight_uom_id, allocated_volume, volume_uom_id, created_at").order("created_at", { ascending: false }).limit(100),
         ]);
         if (!isMounted) return;
         const firstError = [containersResult, linksResult, vgmResult, allocationResult].find((result) => result?.error)?.error;
@@ -687,7 +687,56 @@ function App() {
         (linksResult.data ?? []).forEach((link) => { if (!linksByContainer.has(Number(link.container_id))) linksByContainer.set(Number(link.container_id), link); });
         const vgmByContainer = new Map();
         (vgmResult.data ?? []).forEach((item) => { if (!vgmByContainer.has(Number(item.container_id))) vgmByContainer.set(Number(item.container_id), item); });
-        setContainerData({ rows: (containersResult.data ?? []).map((item) => ({ ...item, shipmentLink: linksByContainer.get(Number(item.container_id)) ?? null, vgm: vgmByContainer.get(Number(item.container_id)) ?? null })), error: "", unavailable: false });
+        const allocationByShipmentContainer = new Map();
+        (allocationResult.data ?? []).forEach((allocation) => {
+          const key = Number(allocation.shipment_container_id);
+          const current = allocationByShipmentContainer.get(key) ?? {
+            count: 0,
+            cargoLineIds: new Set(),
+            quantity: 0,
+            netWeight: 0,
+            grossWeight: 0,
+            volume: 0,
+            hasVolume: false,
+            quantityUomIds: new Set(),
+            weightUomIds: new Set(),
+            volumeUomIds: new Set(),
+          };
+          current.count += 1;
+          if (allocation.shipment_cargo_id != null) current.cargoLineIds.add(Number(allocation.shipment_cargo_id));
+          if (allocation.allocated_quantity != null) current.quantity += Number(allocation.allocated_quantity) || 0;
+          if (allocation.allocated_net_weight != null) current.netWeight += Number(allocation.allocated_net_weight) || 0;
+          if (allocation.allocated_gross_weight != null) current.grossWeight += Number(allocation.allocated_gross_weight) || 0;
+          if (allocation.allocated_volume != null) {
+            current.volume += Number(allocation.allocated_volume) || 0;
+            current.hasVolume = true;
+          }
+          if (allocation.quantity_uom_id != null) current.quantityUomIds.add(Number(allocation.quantity_uom_id));
+          if (allocation.weight_uom_id != null) current.weightUomIds.add(Number(allocation.weight_uom_id));
+          if (allocation.volume_uom_id != null) current.volumeUomIds.add(Number(allocation.volume_uom_id));
+          allocationByShipmentContainer.set(key, current);
+        });
+        const allocationSummary = (link) => {
+          if (!link) return null;
+          const summary = allocationByShipmentContainer.get(Number(link.shipment_container_id));
+          if (!summary) return null;
+          return {
+            ...summary,
+            cargoLineIds: Array.from(summary.cargoLineIds),
+            quantityUomIds: Array.from(summary.quantityUomIds),
+            weightUomIds: Array.from(summary.weightUomIds),
+            volumeUomIds: Array.from(summary.volumeUomIds),
+          };
+        };
+        setContainerData({ rows: (containersResult.data ?? []).map((item) => {
+          const shipmentLink = linksByContainer.get(Number(item.container_id)) ?? null;
+          return {
+            ...item,
+            shipmentLink,
+            vgm: vgmByContainer.get(Number(item.container_id)) ?? null,
+            allocation: allocationSummary(shipmentLink),
+          };
+        }), error: "", unavailable: false });
       } catch (error) {
         if (isMounted) setContainerData({ rows: [], error: error.message || "Unable to load container activity.", unavailable: false });
       } finally { if (isMounted) setContainerLoading(false); }
@@ -2102,7 +2151,7 @@ function App() {
                 <div style={{ marginBottom: "20px" }}><div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Operations</div><h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Containers</h1><p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px" }}>Read-only container visibility using the existing CARGO_VIEW authorization boundary.</p></div>
                 {containerLoading ? <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading container activity...</div> : containerData.unavailable ? <div style={{ background: "#ffffff", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px" }}>Container activity is not available for this role.</div> : containerData.error ? <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "12px", padding: "20px", color: "#b83232", fontSize: "13px", lineHeight: 1.6 }}>Unable to load container activity: {containerData.error}</div> : <section style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", overflowX: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", marginBottom: "14px" }}><h2 style={{ margin: 0, fontSize: "18px", color: "#173b6c" }}>Container records</h2><span style={{ fontSize: "12px", color: "#627d98" }}>Showing up to 25 containers; type and verification remain controlled IDs.</span></div>
-                  {containerData.rows.length === 0 ? <div style={{ color: "#627d98", fontSize: "13px" }}>No container records are available through the authorized read path.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1350px" }}><thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Container", "Type ID", "Owner ID", "Status", "Tare", "Max Gross", "Shipment ID", "Booking ID", "Seal", "VGM", "VGM Status ID"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead><tbody>{containerData.rows.map((item) => <tr key={item.container_id} style={{ borderBottom: "1px solid #eef2f7" }}><td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.container_number}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_type_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.owner_shipping_line_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_status || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.tare_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.maximum_gross_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.shipment_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.booking_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.seal_number || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.vgm?.vgm_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.vgm?.verification_status_id ?? "—"}</td></tr>)}</tbody></table>}
+                  {containerData.rows.length === 0 ? <div style={{ color: "#627d98", fontSize: "13px" }}>No container records are available through the authorized read path.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1350px" }}><thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Container", "Type ID", "Owner ID", "Status", "Tare", "Max Gross", "Shipment ID", "Booking ID", "Seal", "VGM", "VGM Status ID", "Cargo Lines", "Allocated Qty", "Allocated Net", "Allocated Gross"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead><tbody>{containerData.rows.map((item) => <tr key={item.container_id} style={{ borderBottom: "1px solid #eef2f7" }}><td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.container_number}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_type_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.owner_shipping_line_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_status || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.tare_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.maximum_gross_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.shipment_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.booking_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.seal_number || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.vgm?.vgm_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.vgm?.verification_status_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.allocation?.cargoLineIds?.length ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.allocation ? item.allocation.quantity : "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.allocation ? item.allocation.netWeight : "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.allocation ? item.allocation.grossWeight : "—"}</td></tr>)}</tbody></table>}
                 </section>}
               </div>
             </>
