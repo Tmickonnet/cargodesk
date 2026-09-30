@@ -91,6 +91,7 @@ const dashboardCards = [
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [globalSearchTarget, setGlobalSearchTarget] = useState(null);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -957,12 +958,13 @@ function App() {
     loadReportsWorkspace();
     return () => { isMounted = false; };
   }, [activePage, session, authorizationLoading, role, hasPermission]);
-  const handleNavigation = (item) => {
+  const handleNavigation = (item, preserveSearchTarget = false) => {
     if (authorizationLoading || !role || allowedNavigation[item] !== true) {
       return;
     }
 
     setActivePage(item);
+    if (!preserveSearchTarget) setGlobalSearchTarget(null);
   };
 
   const visibleNavigationGroups = navigationGroups
@@ -1682,7 +1684,14 @@ function App() {
                 };
                 const targetPage = pageByType[result?.type];
                 if (targetPage && allowedNavigation[targetPage] === true) {
-                  handleNavigation(targetPage);
+                  if (result?.type === "Shipments" && result?.row?.shipment_id) {
+                    setGlobalSearchTarget({ type: "Shipments", id: Number(result.row.shipment_id) });
+                  } else if (result?.type === "Containers" && result?.row?.container_id) {
+                    setGlobalSearchTarget({ type: "Containers", id: Number(result.row.container_id) });
+                  } else {
+                    setGlobalSearchTarget(null);
+                  }
+                  handleNavigation(targetPage, true);
                   setShowGlobalSearch(false);
                 }
               }}
@@ -2198,7 +2207,7 @@ function App() {
                   {containerData.rows.length === 0 ? <div style={{ color: "#627d98", fontSize: "13px" }}>No container records are available through the authorized read path.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1350px" }}><thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Container", "Type ID", "Owner ID", "Status", "Tare", "Max Gross", "Shipment ID", "Booking ID", "Seal", "VGM", "VGM Status ID", "Cargo Lines", "Allocated Qty", "Allocated Net", "Allocated Gross"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead><tbody>{containerData.rows.map((item) => <tr key={item.container_id} style={{ borderBottom: "1px solid #eef2f7" }}><td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.container_number}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_type_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.owner_shipping_line_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.container_status || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.tare_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.maximum_gross_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.shipment_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.booking_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipmentLink?.seal_number || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.vgm?.vgm_weight ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.vgm?.verification_status_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.allocation?.cargoLineIds?.length ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.allocation ? item.allocation.quantity : "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.allocation ? item.allocation.netWeight : "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.allocation ? item.allocation.grossWeight : "—"}</td></tr>)}</tbody></table>}
                 </section>}
               </div>
-              <ContainerSearchPreview rows={containerData.rows} canView={hasPermission("CARGO_VIEW")} />
+              <ContainerSearchPreview rows={containerData.rows} canView={hasPermission("CARGO_VIEW")} initialContainerId={globalSearchTarget?.type === "Containers" ? globalSearchTarget.id : null} />
             </>
           ) : isShipments ? (
             <>
@@ -2211,7 +2220,7 @@ function App() {
                   {shipmentData.rows.length === 0 ? <div style={{ color: "#627d98", fontSize: "13px" }}>No shipment records are available through the authorized read path.</div> : <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1100px" }}><thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Shipment", "Status", "Transport Mode ID", "Planned Departure", "Planned Arrival", "Actual Departure", "Actual Arrival", "Cargo Ready"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead><tbody>{shipmentData.rows.map((item) => <tr key={item.shipment_id} style={{ borderBottom: "1px solid #eef2f7" }}><td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.shipment_number || ("Shipment " + item.shipment_id)}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.status?.status_name || item.status?.status_code || item.shipment_status_id || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.primary_transport_mode_id ?? "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_departure_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.planned_arrival_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_departure_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.actual_arrival_date || "—"}</td><td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.cargo_ready_date || "—"}</td></tr>)}</tbody></table>}
                 </section>}
               </div>
-              <ShipmentCargoWorkspace shipments={shipmentData.rows} />
+              <ShipmentCargoWorkspace shipments={shipmentData.rows} initialShipmentId={globalSearchTarget?.type === "Shipments" ? globalSearchTarget.id : null} />
               <ProductClassificationWorkspace />
             </>
           ) : isShipping ? (

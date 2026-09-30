@@ -22,7 +22,7 @@ const emptyForm = {
   expiryDate: "",
 };
 
-function ShipmentCargoWorkspace({ shipments = [] }) {
+function ShipmentCargoWorkspace({ shipments = [], initialShipmentId = null }) {
   const [selectedShipmentId, setSelectedShipmentId] = useState("");
   const { hasPermission } = useAuthorization(true);
   const [canEdit, setCanEdit] = useState(false);
@@ -44,10 +44,14 @@ function ShipmentCargoWorkspace({ shipments = [] }) {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (initialShipmentId != null && shipments.some((item) => Number(item.shipment_id) === Number(initialShipmentId))) {
+      setSelectedShipmentId(String(initialShipmentId));
+      return;
+    }
     if (!selectedShipmentId && shipments.length) {
       setSelectedShipmentId(String(shipments[0].shipment_id));
     }
-  }, [shipments, selectedShipmentId]);
+  }, [shipments, selectedShipmentId, initialShipmentId]);
 
   useEffect(() => {
     let mounted = true;
