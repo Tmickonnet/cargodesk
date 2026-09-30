@@ -229,7 +229,7 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
+    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       if (!isMounted) {
         return;
       }
@@ -241,7 +241,15 @@ function App() {
       if (currentSession) {
         setConnectionStatus("Checking database...");
         setConnectionMessage("");
-        await checkAuthenticatedDatabase(currentSession);
+
+        // Supabase documents a deadlock risk when async Supabase calls are
+        // made directly inside onAuthStateChange. Defer the database check
+        // until the auth callback has returned.
+        window.setTimeout(() => {
+          if (isMounted) {
+            void checkAuthenticatedDatabase(currentSession);
+          }
+        }, 0);
       } else {
         setConnectionStatus("Supabase reachable");
         setConnectionMessage(
