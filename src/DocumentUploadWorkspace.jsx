@@ -178,8 +178,9 @@ export default function DocumentUploadWorkspace({
           uploadPending: false,
           verificationFailed: true,
         });
+        const verificationDetail = verifyError?.message || verifyError?.name || "no signed URL was returned";
         throw new Error(
-          "The physical file was uploaded, but CargoDesk could not verify private Storage access."
+          `The physical file was uploaded, but private Storage access verification failed: ${verificationDetail}`
         );
       }
 
