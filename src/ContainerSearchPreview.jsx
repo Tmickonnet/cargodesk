@@ -3,7 +3,7 @@ import { supabase } from "./lib/supabase";
 
 const cardStyle = { background: "#fff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "16px" };
 
-export default function ContainerSearchPreview({ rows, canView }) {
+export default function ContainerSearchPreview({ rows, canView, initialContainerId = null }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
   const [evidence, setEvidence] = useState({ rows: [], loading: false, error: "" });
@@ -16,6 +16,13 @@ export default function ContainerSearchPreview({ rows, canView }) {
       item.shipmentLink?.booking_id, item.shipmentLink?.seal_number, item.vgm?.vgm_reference,
     ].some((value) => String(value ?? "").toLowerCase().includes(q)));
   }, [rows, query]);
+
+  useEffect(() => {
+    if (initialContainerId != null) {
+      const match = rows.find((item) => Number(item.container_id) === Number(initialContainerId));
+      if (match) setSelected(match);
+    }
+  }, [initialContainerId, rows]);
 
   useEffect(() => {
     let mounted = true;
