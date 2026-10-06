@@ -889,7 +889,7 @@ function App() {
       if (
         !data?.success ||
         Number(data.delivery_id) !== Number(delivery.delivery_id) ||
-        data.target_status_code !== targetStatus
+        data.delivery_status_code !== targetStatus
       ) {
         throw new Error(
           "The delivery transition response could not be verified."
@@ -897,7 +897,7 @@ function App() {
       }
 
       setDeliveryTransitionMessage(
-        `Delivery ${data.delivery_reference || delivery.delivery_reference} transitioned to ${data.target_status_code}.`
+        `Delivery ${data.delivery_reference || delivery.delivery_reference} transitioned to ${data.delivery_status_code}.`
       );
 
       setDeliveryRefreshKey((current) => current + 1);
