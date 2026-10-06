@@ -152,6 +152,8 @@ function App() {
   const [deliveryDraft, setDeliveryDraft] = useState(emptyDeliveryForm);
   const [deliveryTransitioningId, setDeliveryTransitioningId] = useState(null);
   const [deliveryTransitionMessage, setDeliveryTransitionMessage] = useState("");
+  const [deliveryDeliveredId, setDeliveryDeliveredId] = useState(null);
+  const [deliveryReceivedBy, setDeliveryReceivedBy] = useState("");
 
   const {
     role,
@@ -861,18 +863,10 @@ function App() {
   const handleDeliveryTransition = async (delivery, targetStatus) => {
     if (!delivery?.delivery_id || !targetStatus || deliveryTransitioningId !== null) return;
 
-    let receivedBy = null;
-
-    if (targetStatus === "DELIVERED") {
-      receivedBy = window.prompt(
-        "Received by (optional):",
-        delivery.received_by || ""
-      );
-
-      if (receivedBy === null) return;
-
-      receivedBy = receivedBy.trim() || null;
-    }
+    const receivedBy =
+      targetStatus === "DELIVERED"
+        ? deliveryReceivedBy.trim() || null
+        : null;
 
     setDeliveryTransitioningId(Number(delivery.delivery_id));
     setDeliveryTransitionMessage("");
@@ -899,6 +893,8 @@ function App() {
       setDeliveryTransitionMessage(
         `Delivery ${data.delivery_reference || delivery.delivery_reference} transitioned to ${data.delivery_status_code}.`
       );
+      setDeliveryDeliveredId(null);
+      setDeliveryReceivedBy("");
 
       setDeliveryRefreshKey((current) => current + 1);
     } catch (error) {
@@ -2512,24 +2508,95 @@ function App() {
                                 Mark Arrived
                               </button>
                             ) : item.status?.status_code === "ARRIVED" ? (
-                              <button
-                                type="button"
-                                onClick={() => handleDeliveryTransition(item, "DELIVERED")}
-                                disabled={deliveryTransitioningId !== null}
-                                style={{
-                                  border: "none",
-                                  borderRadius: "6px",
-                                  padding: "7px 10px",
-                                  background: "#173b6c",
-                                  color: "#ffffff",
-                                  cursor: deliveryTransitioningId === null ? "pointer" : "not-allowed",
-                                  fontSize: "11px",
-                                  fontWeight: "700",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                Mark Delivered
-                              </button>
+                              deliveryDeliveredId === Number(item.delivery_id) ? (
+                                <div style={{ minWidth: "220px", display: "grid", gap: "8px" }}>
+                                  <label style={{ fontSize: "11px", fontWeight: "700", color: "#334e68" }}>
+                                    Received by <span style={{ fontWeight: "400", color: "#627d98" }}>(optional)</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={deliveryReceivedBy}
+                                    onChange={(event) => setDeliveryReceivedBy(event.target.value)}
+                                    maxLength={160}
+                                    placeholder="Receiver name"
+                                    disabled={deliveryTransitioningId !== null}
+                                    style={{
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      border: "1px solid #bcccdc",
+                                      borderRadius: "6px",
+                                      padding: "7px 9px",
+                                      fontSize: "11px",
+                                      color: "#334e68",
+                                      background: "#ffffff",
+                                    }}
+                                  />
+                                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeliveryTransition(item, "DELIVERED")}
+                                      disabled={deliveryTransitioningId !== null}
+                                      style={{
+                                        border: "none",
+                                        borderRadius: "6px",
+                                        padding: "7px 10px",
+                                        background: "#173b6c",
+                                        color: "#ffffff",
+                                        cursor: deliveryTransitioningId === null ? "pointer" : "not-allowed",
+                                        fontSize: "11px",
+                                        fontWeight: "700",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      Confirm Delivered
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDeliveryDeliveredId(null);
+                                        setDeliveryReceivedBy("");
+                                      }}
+                                      disabled={deliveryTransitioningId !== null}
+                                      style={{
+                                        border: "1px solid #bcccdc",
+                                        borderRadius: "6px",
+                                        padding: "7px 10px",
+                                        background: "#ffffff",
+                                        color: "#334e68",
+                                        cursor: deliveryTransitioningId === null ? "pointer" : "not-allowed",
+                                        fontSize: "11px",
+                                        fontWeight: "700",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeliveryDeliveredId(Number(item.delivery_id));
+                                    setDeliveryReceivedBy(item.received_by || "");
+                                    setDeliveryTransitionMessage("");
+                                  }}
+                                  disabled={deliveryTransitioningId !== null}
+                                  style={{
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    padding: "7px 10px",
+                                    background: "#173b6c",
+                                    color: "#ffffff",
+                                    cursor: deliveryTransitioningId === null ? "pointer" : "not-allowed",
+                                    fontSize: "11px",
+                                    fontWeight: "700",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  Mark Delivered
+                                </button>
+                              )
                             ) : (
                               <span style={{ color: "#627d98" }}>—</span>
                             )}
