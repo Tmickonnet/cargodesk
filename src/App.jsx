@@ -11,6 +11,7 @@ import ContainerSearchPreview from "./ContainerSearchPreview";
 import GlobalSearchWorkspace from "./GlobalSearchWorkspace";
 import DocumentUploadWorkspace from "./DocumentUploadWorkspace";
 import ProcurementWorkspace from "./ProcurementWorkspace";
+import CreateDeliveryForm from "./CreateDeliveryForm";
 
 const navigationGroups = [
   {
@@ -144,6 +145,10 @@ function App() {
   const [containerLoading, setContainerLoading] = useState(false);
   const [deliveryData, setDeliveryData] = useState({ rows: [], error: "", unavailable: false });
   const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [deliveryCreateAllowed, setDeliveryCreateAllowed] = useState(false);
+  const [showDeliveryCreate, setShowDeliveryCreate] = useState(false);
+  const [deliveryCreateMessage, setDeliveryCreateMessage] = useState("");
+  const [deliveryRefreshKey, setDeliveryRefreshKey] = useState(0);
 
   const {
     role,
@@ -768,8 +773,13 @@ function App() {
     const loadDeliveryWorkspace = async () => {
       if (!isDelivery || !session || authorizationLoading || !role) return;
 
-      const permitted = await hasPermission("DELIVERY_VIEW");
+      const [permitted, canCreate] = await Promise.all([
+        hasPermission("DELIVERY_VIEW"),
+        hasPermission("DELIVERY_CREATE"),
+      ]);
       if (!isMounted) return;
+
+      setDeliveryCreateAllowed(canCreate === true);
 
       if (!permitted) {
         setDeliveryData({ rows: [], error: "", unavailable: true });
@@ -834,7 +844,15 @@ function App() {
 
     loadDeliveryWorkspace();
     return () => { isMounted = false; };
-  }, [isDelivery, session, authorizationLoading, role, hasPermission]);
+  }, [isDelivery, session, authorizationLoading, role, hasPermission, deliveryRefreshKey]);
+
+  const handleDeliveryCreated = (result) => {
+    setShowDeliveryCreate(false);
+    setDeliveryRefreshKey((current) => current + 1);
+    setDeliveryCreateMessage(
+      `Delivery ${result.delivery_reference} created successfully in PLANNED status.`
+    );
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -2262,9 +2280,70 @@ function App() {
                 <button type="button" onClick={() => handleNavigation("Dashboard")} style={{ border: "none", background: "transparent", padding: 0, cursor: allowedNavigation.Dashboard === true ? "pointer" : "not-allowed", color: "#1f5f95", fontSize: "13px", fontWeight: "600", marginBottom: "20px" }}>← Back to Dashboard</button>
                 <div style={{ marginBottom: "20px" }}>
                   <div style={{ fontSize: "12px", fontWeight: "600", color: "#627d98", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.6px" }}>Operations</div>
-                  <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Delivery</h1>
-                  <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px", lineHeight: 1.6 }}>Read-only delivery and proof-of-delivery visibility using the existing DELIVERY_VIEW authorization boundary.</p>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: "16px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <h1 style={{ margin: 0, fontSize: "28px", color: "#173b6c" }}>Delivery</h1>
+                      <p style={{ margin: "8px 0 0", color: "#627d98", fontSize: "14px", lineHeight: 1.6 }}>
+                        Create and monitor delivery records through controlled authorized workflows.
+                      </p>
+                    </div>
+
+                    {deliveryCreateAllowed && !showDeliveryCreate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeliveryCreateMessage("");
+                          setShowDeliveryCreate(true);
+                        }}
+                        style={{
+                          border: "none",
+                          background: "#173b6c",
+                          color: "#ffffff",
+                          padding: "10px 16px",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        Create Delivery
+                      </button>
+                    )}
+                  </div>
+
+                  {deliveryCreateMessage && (
+                    <div
+                      style={{
+                        marginTop: "14px",
+                        padding: "12px",
+                        borderRadius: "8px",
+                        border: "1px solid #bee3f8",
+                        background: "#ebf8ff",
+                        color: "#2a4365",
+                        fontSize: "13px",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {deliveryCreateMessage}
+                    </div>
+                  )}
                 </div>
+
+                {showDeliveryCreate && (
+                  <CreateDeliveryForm
+                    onCreated={handleDeliveryCreated}
+                    onCancel={() => setShowDeliveryCreate(false)}
+                  />
+                )}
                 {deliveryLoading ? (
                   <div style={{ background: "#ffffff", border: "1px solid #e5e9f0", borderRadius: "12px", padding: "20px", color: "#627d98", fontSize: "13px" }}>Loading delivery activity...</div>
                 ) : deliveryData.unavailable ? (
