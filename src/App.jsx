@@ -150,6 +150,8 @@ function App() {
   const [deliveryCreateMessage, setDeliveryCreateMessage] = useState("");
   const [deliveryRefreshKey, setDeliveryRefreshKey] = useState(0);
   const [deliveryDraft, setDeliveryDraft] = useState(emptyDeliveryForm);
+  const [deliveryTransitioningId, setDeliveryTransitioningId] = useState(null);
+  const [deliveryTransitionMessage, setDeliveryTransitionMessage] = useState("");
 
   const {
     role,
@@ -854,6 +856,60 @@ function App() {
     setDeliveryCreateMessage(
       `Delivery ${result.delivery_reference} created successfully in PLANNED status.`
     );
+  };
+
+  const handleDeliveryTransition = async (delivery, targetStatus) => {
+    if (!delivery?.delivery_id || !targetStatus || deliveryTransitioningId !== null) return;
+
+    let receivedBy = null;
+
+    if (targetStatus === "DELIVERED") {
+      receivedBy = window.prompt(
+        "Received by (optional):",
+        delivery.received_by || ""
+      );
+
+      if (receivedBy === null) return;
+
+      receivedBy = receivedBy.trim() || null;
+    }
+
+    setDeliveryTransitioningId(Number(delivery.delivery_id));
+    setDeliveryTransitionMessage("");
+
+    try {
+      const { data, error } = await supabase.rpc("transition_delivery", {
+        p_delivery_id: Number(delivery.delivery_id),
+        p_target_status_code: targetStatus,
+        p_received_by: receivedBy,
+      });
+
+      if (error) throw error;
+
+      if (
+        !data?.success ||
+        Number(data.delivery_id) !== Number(delivery.delivery_id) ||
+        data.delivery_status_code !== targetStatus
+      ) {
+        throw new Error(
+          "The delivery transition response could not be verified."
+        );
+      }
+
+      setDeliveryTransitionMessage(
+        `Delivery ${data.delivery_reference || delivery.delivery_reference} transitioned to ${data.delivery_status_code}.`
+      );
+
+      setDeliveryRefreshKey((current) => current + 1);
+    } catch (error) {
+      console.error("CargoDesk Delivery transition failed:", error);
+      setDeliveryTransitionMessage(
+        error?.message ||
+          "Unable to transition the delivery through the authorized workflow."
+      );
+    } finally {
+      setDeliveryTransitioningId(null);
+    }
   };
 
   useEffect(() => {
@@ -2340,6 +2396,23 @@ function App() {
                   )}
                 </div>
 
+                {deliveryTransitionMessage && (
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      padding: "12px",
+                      borderRadius: "8px",
+                      border: "1px solid #bee3f8",
+                      background: "#ebf8ff",
+                      color: "#2a4365",
+                      fontSize: "13px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {deliveryTransitionMessage}
+                  </div>
+                )}
+
                 {showDeliveryCreate && (
                   <CreateDeliveryForm
                     form={deliveryDraft}
@@ -2367,7 +2440,7 @@ function App() {
                       <div style={{ color: "#627d98", fontSize: "13px" }}>No delivery records are available through the authorized read path.</div>
                     ) : (
                       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1450px" }}>
-                        <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Delivery", "Shipment ID", "Status", "Planned", "Dispatch", "Estimated", "Actual", "Vehicle", "Received By", "POD", "POD Verification ID"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead>
+                        <thead><tr style={{ borderBottom: "1px solid #d9e2ec" }}>{["Delivery", "Shipment ID", "Status", "Planned", "Dispatch", "Estimated", "Actual", "Vehicle", "Received By", "POD", "POD Verification ID", "Next Action"].map((heading) => <th key={heading} style={{ padding: "9px 8px", textAlign: "left", fontSize: "11px", color: "#627d98", textTransform: "uppercase", letterSpacing: "0.5px" }}>{heading}</th>)}</tr></thead>
                         <tbody>{deliveryData.rows.map((item) => <tr key={item.delivery_id} style={{ borderBottom: "1px solid #eef2f7" }}>
                           <td style={{ padding: "10px 8px", fontSize: "12px", fontWeight: "700", color: "#1f5f95" }}>{item.delivery_reference || ("Delivery " + item.delivery_id)}</td>
                           <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.shipment_id ?? "—"}</td>
@@ -2380,6 +2453,87 @@ function App() {
                           <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.received_by || "—"}</td>
                           <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.pod?.pod_reference || "—"}</td>
                           <td style={{ padding: "10px 8px", fontSize: "12px", color: "#627d98" }}>{item.pod?.verification_status_id ?? "—"}</td>
+                          <td style={{ padding: "10px 8px", fontSize: "12px" }}>
+                            {item.status?.status_code === "PLANNED" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeliveryTransition(item, "DISPATCHED")}
+                                disabled={deliveryTransitioningId !== null}
+                                style={{
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  padding: "7px 10px",
+                                  background: "#173b6c",
+                                  color: "#ffffff",
+                                  cursor: deliveryTransitioningId === null ? "pointer" : "not-allowed",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Dispatch
+                              </button>
+                            ) : item.status?.status_code === "DISPATCHED" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeliveryTransition(item, "IN_TRANSIT")}
+                                disabled={deliveryTransitioningId !== null}
+                                style={{
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  padding: "7px 10px",
+                                  background: "#173b6c",
+                                  color: "#ffffff",
+                                  cursor: deliveryTransitioningId === null ? "pointer" : "not-allowed",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Start Transit
+                              </button>
+                            ) : item.status?.status_code === "IN_TRANSIT" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeliveryTransition(item, "ARRIVED")}
+                                disabled={deliveryTransitioningId !== null}
+                                style={{
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  padding: "7px 10px",
+                                  background: "#173b6c",
+                                  color: "#ffffff",
+                                  cursor: deliveryTransitioningId === null ? "pointer" : "not-allowed",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Mark Arrived
+                              </button>
+                            ) : item.status?.status_code === "ARRIVED" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeliveryTransition(item, "DELIVERED")}
+                                disabled={deliveryTransitioningId !== null}
+                                style={{
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  padding: "7px 10px",
+                                  background: "#173b6c",
+                                  color: "#ffffff",
+                                  cursor: deliveryTransitioningId === null ? "pointer" : "not-allowed",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Mark Delivered
+                              </button>
+                            ) : (
+                              <span style={{ color: "#627d98" }}>—</span>
+                            )}
+                          </td>
                         </tr>)}</tbody>
                       </table>
                     )}
