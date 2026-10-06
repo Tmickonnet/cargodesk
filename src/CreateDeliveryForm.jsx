@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 
-const emptyForm = {
+export const emptyDeliveryForm = {
   shipmentId: "",
   customerId: "",
   transporterId: "",
@@ -38,8 +38,7 @@ const fieldStyle = {
   marginBottom: "14px",
 };
 
-export default function CreateDeliveryForm({ onCreated, onCancel }) {
-  const [form, setForm] = useState(emptyForm);
+export default function CreateDeliveryForm({ form, onFormChange, onCreated, onCancel }) {
   const [shipments, setShipments] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [transporters, setTransporters] = useState([]);
@@ -136,10 +135,12 @@ export default function CreateDeliveryForm({ onCreated, onCancel }) {
   }, []);
 
   const updateField = (field, value) => {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    if (typeof onFormChange === "function") {
+      onFormChange((current) => ({
+        ...current,
+        [field]: value,
+      }));
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -214,8 +215,6 @@ export default function CreateDeliveryForm({ onCreated, onCancel }) {
             "Delivery creation did not return the expected successful PLANNED result."
         );
       }
-
-      setForm(emptyForm);
 
       if (typeof onCreated === "function") {
         onCreated(data);

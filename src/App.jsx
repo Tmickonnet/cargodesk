@@ -11,7 +11,7 @@ import ContainerSearchPreview from "./ContainerSearchPreview";
 import GlobalSearchWorkspace from "./GlobalSearchWorkspace";
 import DocumentUploadWorkspace from "./DocumentUploadWorkspace";
 import ProcurementWorkspace from "./ProcurementWorkspace";
-import CreateDeliveryForm from "./CreateDeliveryForm";
+import CreateDeliveryForm, { emptyDeliveryForm } from "./CreateDeliveryForm";
 
 const navigationGroups = [
   {
@@ -149,6 +149,7 @@ function App() {
   const [showDeliveryCreate, setShowDeliveryCreate] = useState(false);
   const [deliveryCreateMessage, setDeliveryCreateMessage] = useState("");
   const [deliveryRefreshKey, setDeliveryRefreshKey] = useState(0);
+  const [deliveryDraft, setDeliveryDraft] = useState(emptyDeliveryForm);
 
   const {
     role,
@@ -847,6 +848,7 @@ function App() {
   }, [isDelivery, session, authorizationLoading, role, hasPermission, deliveryRefreshKey]);
 
   const handleDeliveryCreated = (result) => {
+    setDeliveryDraft(emptyDeliveryForm);
     setShowDeliveryCreate(false);
     setDeliveryRefreshKey((current) => current + 1);
     setDeliveryCreateMessage(
@@ -2340,8 +2342,13 @@ function App() {
 
                 {showDeliveryCreate && (
                   <CreateDeliveryForm
+                    form={deliveryDraft}
+                    onFormChange={setDeliveryDraft}
                     onCreated={handleDeliveryCreated}
-                    onCancel={() => setShowDeliveryCreate(false)}
+                    onCancel={() => {
+                      setDeliveryDraft(emptyDeliveryForm);
+                      setShowDeliveryCreate(false);
+                    }}
                   />
                 )}
                 {deliveryLoading ? (
