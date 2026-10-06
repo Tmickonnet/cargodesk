@@ -38,7 +38,10 @@ const fieldStyle = {
   marginBottom: "14px",
 };
 
+const DELIVERY_DRAFT_STORAGE_KEY = "cargodesk.deliveryDraft.v1";
+
 export default function CreateDeliveryForm({ form, onFormChange, onCreated, onCancel }) {
+  const stableFormChange = onFormChange;
   const [shipments, setShipments] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [transporters, setTransporters] = useState([]);
@@ -46,6 +49,33 @@ export default function CreateDeliveryForm({ form, onFormChange, onCreated, onCa
   const [loadingReferences, setLoadingReferences] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    try {
+      const storedDraft = window.sessionStorage.getItem(DELIVERY_DRAFT_STORAGE_KEY);
+      if (storedDraft && typeof onFormChange === "function") {
+        const parsedDraft = JSON.parse(storedDraft);
+        if (parsedDraft && typeof parsedDraft === "object") {
+          stableFormChange((current) => ({ ...current, ...parsedDraft }));
+        }
+      }
+    } catch (storageError) {
+      console.warn("CargoDesk Delivery draft restore skipped:", storageError);
+    }
+  }, [stableFormChange]);
+
+  useEffect(() => {
+    try {
+      const hasDraft = Object.values(form ?? {}).some((value) => String(value ?? "").trim() !== "");
+      if (hasDraft) {
+        window.sessionStorage.setItem(DELIVERY_DRAFT_STORAGE_KEY, JSON.stringify(form));
+      } else {
+        window.sessionStorage.removeItem(DELIVERY_DRAFT_STORAGE_KEY);
+      }
+    } catch (storageError) {
+      console.warn("CargoDesk Delivery draft persistence skipped:", storageError);
+    }
+  }, [form]);
 
   useEffect(() => {
     let isMounted = true;
@@ -214,6 +244,12 @@ export default function CreateDeliveryForm({ form, onFormChange, onCreated, onCa
           data?.message ||
             "Delivery creation did not return the expected successful PLANNED result."
         );
+      }
+
+      try {
+        window.sessionStorage.removeItem(DELIVERY_DRAFT_STORAGE_KEY);
+      } catch (storageError) {
+        console.warn("CargoDesk Delivery draft cleanup skipped:", storageError);
       }
 
       if (typeof onCreated === "function") {
