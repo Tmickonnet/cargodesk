@@ -177,13 +177,32 @@ function App() {
         return;
       }
 
-      const {
-        data: statusData,
-        error: statusError,
-      } = await supabase
-        .from("shipment_statuses")
-        .select("shipment_status_id")
-        .limit(1);
+      let statusData = null;
+      let statusError = null;
+
+      const runDatabaseCheck = async () => {
+        const result = await supabase
+          .from("shipment_statuses")
+          .select("shipment_status_id")
+          .limit(1);
+
+        statusData = result.data;
+        statusError = result.error;
+      };
+
+      await runDatabaseCheck();
+
+      // A session refresh can briefly leave an in-flight request carrying the
+      // previous access token. Retry the harmless connectivity probe once
+      // after refreshing the session so a transient 401 does not become a
+      // persistent CargoDesk connection error.
+      if (statusError?.status === 401) {
+        const { error: refreshError } = await supabase.auth.refreshSession();
+
+        if (!refreshError) {
+          await runDatabaseCheck();
+        }
+      }
 
       if (!isMounted) {
         return;
