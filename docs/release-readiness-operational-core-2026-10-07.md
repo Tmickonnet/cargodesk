@@ -34,6 +34,7 @@ The following areas are verified at the current evidence boundary:
 - Classification workflow and audit traceability: VERIFIED, subject to reference-data limitation below.
 - RBAC/RLS and controlled RPC authorization: VERIFIED.
 - Operational audit traceability: VERIFIED.
+- Audit Log read workspace: IMPLEMENTED and live authorization contract VERIFIED; fresh interactive browser qualification remains separate runtime evidence.
 - Exception security foundation: VERIFIED.
 - Inventory relational/security foundation: VERIFIED.
 - Procurement foundation: VERIFIED.
@@ -46,8 +47,8 @@ The controlled classification workflow is verified, but the currently inspected 
 ### 2. Legacy document physical artifacts — LIMITATION
 Current controlled document storage is verified. Some legacy/test document metadata records do not have corresponding Storage objects. Authoritative replacement files were not established, so no fabricated storage repair was performed.
 
-### 3. Audit Log GUI — EVIDENCE-GATED
-The underlying audit trail is verified. The dedicated Audit Log read workspace remains subject to the evidence-first inspection and acceptance process tracked by GitHub issue #28.
+### 3. Audit Log GUI — RUNTIME EVIDENCE PENDING
+The audit trail, RLS boundary, AUDIT_VIEW permission, safe browser field mapping, bounded query, and dedicated read workspace are verified in the live database/source contract. GitHub issue #28 was closed after this evidence review. A fresh interactive browser click-through has not been claimed as completed in this release record.
 
 ### 4. Inventory posting engine — DEFERRED
 Inventory foundation and authorization are verified, but a generalized inventory movement/posting engine has not been implemented because authoritative business rules for posting, reversal, receiving, quantities, and UOM handling have not been established.
